@@ -29,6 +29,17 @@
       if (!l) l = (navigator.language || 'es').toLowerCase().indexOf('en') === 0 ? 'en' : 'es';
       d.dataset.lang = l; d.setAttribute('lang', l);
     } catch (e) { d.dataset.lang = 'es'; }
+    /* Modo ligero: ahorro de datos / gama baja / reduced-motion.
+       Se marca ANTES del primer pintado para que los efectos ni se dibujen. */
+    try {
+      var c = navigator.connection;
+      var lite = (c && c.saveData === true)
+        || (navigator.deviceMemory && navigator.deviceMemory <= 4)
+        || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4)
+        || matchMedia('(prefers-reduced-data: reduce)').matches
+        || matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (lite) d.setAttribute('data-lite', '');
+    } catch (e) {}
   })();
 </script>
 
@@ -67,6 +78,10 @@
   --btn-grad: linear-gradient(103deg, #FF6B4A 0%, #FFB24C 100%);
   --map-filter: invert(0) saturate(1) contrast(1);
   --map-blend: overlay;
+  /* aurora — temperatura de la noche */
+  --au-1:    rgba(255,107,74,.26);
+  --au-2:    rgba(192,71,94,.24);
+  --au-3:    rgba(255,178,76,.14);
 }
 :root[data-theme="day"] {
   /* DAY — del café */
@@ -92,6 +107,10 @@
   --btn-grad: linear-gradient(103deg, #E8552C 0%, #E39320 100%);
   --map-filter: saturate(.9) contrast(1.02) brightness(1.02);
   --map-blend: multiply;
+  /* aurora — temperatura del café de la mañana */
+  --au-1:    rgba(255,178,76,.34);
+  --au-2:    rgba(232,85,44,.18);
+  --au-3:    rgba(255,214,140,.42);
 }
 
 * { box-sizing: border-box; }
@@ -125,8 +144,29 @@ img { max-width: 100%; display: block; }
 .eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--coral); display: inline-block; }
 .section { padding: clamp(72px, 10vw, 150px) 0; position: relative; }
 
+/* ============================ AURORA (día ↔ noche) ============================ */
+/* Fondo vivo detrás del contenido: cambia de temperatura al alternar el modo.
+   Vive DENTRO de <main> (z-index:-1) para quedar sobre su fondo y bajo el texto.
+   Bucle sólo con transform → compositor puro. Medidas en vw: la barra de URL
+   del móvil no las cambia, así que nunca hay repintado al hacer scroll.        */
+main { position: relative; z-index: 1; background: var(--bg); }
+.aurora { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.aurora span { position: absolute; display: block; border-radius: 50%; will-change: transform; transition: background 1s ease; }
+.aurora .a1 { width: 66vw; height: 66vw; left: -18vw; top: 4vw;
+  background: radial-gradient(circle at 50% 50%, var(--au-1), transparent 70%); animation: auA 54s ease-in-out infinite; }
+.aurora .a2 { width: 78vw; height: 78vw; right: -22vw; top: 42vw;
+  background: radial-gradient(circle at 50% 50%, var(--au-2), transparent 70%); animation: auB 68s ease-in-out infinite; }
+.aurora .a3 { width: 58vw; height: 58vw; left: 26vw; bottom: -16vw;
+  background: radial-gradient(circle at 50% 50%, var(--au-3), transparent 70%); animation: auC 46s ease-in-out infinite; }
+@keyframes auA { 0%,100% { transform: translate3d(0,0,0) scale(1); }    50% { transform: translate3d(15%,9%,0) scale(1.16); } }
+@keyframes auB { 0%,100% { transform: translate3d(0,0,0) scale(1.08); } 50% { transform: translate3d(-13%,-11%,0) scale(1); } }
+@keyframes auC { 0%,100% { transform: translate3d(0,0,0) scale(1.04); } 50% { transform: translate3d(9%,-13%,0) scale(1.14); } }
+/* Gama baja / ahorro de datos: fuera. Móvil: se queda, pero quieta (coste cero). */
+:root[data-lite] .aurora { display: none; }
+@media (max-width: 820px) { .aurora span { animation: none; } }
+
 /* ============================ CURSOR GLOW ============================ */
-.glow { position: fixed; top: 0; left: 0; width: 460px; height: 460px; border-radius: 50%; pointer-events: none; z-index: 1;
+.glow { position: fixed; top: 0; left: 0; width: 460px; height: 460px; border-radius: 50%; pointer-events: none; z-index: 49;
   background: radial-gradient(circle, rgba(255,107,74,.14), transparent 62%); transform: translate(-50%,-50%); opacity: 0; transition: opacity .4s ease; mix-blend-mode: screen; }
 :root[data-theme="day"] .glow { background: radial-gradient(circle, rgba(232,85,44,.10), transparent 62%); mix-blend-mode: multiply; }
 
@@ -214,7 +254,13 @@ header.nav.scrolled {
 
 .hero-inner { position: relative; z-index: 2; width: min(1200px, 92vw); margin-inline: auto; }
 .hero h1 { font-size: clamp(3.1rem, 11vw, 9.3rem); font-weight: 500; letter-spacing: -.03em; line-height: .92; }
-.hero h1 .grad { background: var(--sun); -webkit-background-clip: text; background-clip: text; color: transparent; font-style: italic; font-weight: 400; }
+.hero h1 .grad { background: var(--sun); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; font-style: italic; font-weight: 400; }
+/* Shimmer (preset 03) sobre la palabra que marca el paso café → cóctel */
+:root:not([data-lite]) .hero h1 .grad { background-size: 220% 100%; animation: fx-shimmer 7s linear infinite; }
+/* El barrido debe quedarse SIEMPRE dentro del texto: con background-size:220% cualquier
+   posición entre 100% y 0% cubre el span entero. Iba a -220%, que sacaba el gradiente
+   fuera y dejaba "al cóctel" invisible (color:transparent) casi todo el ciclo. */
+@keyframes fx-shimmer { from { background-position: 100% 0; } to { background-position: 0% 0; } }
 .hero .lede { max-width: 40ch; margin-top: clamp(20px, 3vh, 30px); font-size: clamp(1rem, 1.5vw, 1.22rem); color: var(--ink-2); line-height: 1.55; }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 32px; }
 .hero-meta { display: flex; flex-wrap: wrap; gap: clamp(18px, 3vw, 42px); margin-top: clamp(34px, 5vh, 56px); padding-top: 26px; border-top: 1px solid var(--line); }
@@ -331,7 +377,30 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
 .foot-col h4 { font-family: "Space Mono", monospace; font-size: .66rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 16px; }
 .foot-col a, .foot-col p { display: block; color: var(--ink-2); font-size: .92rem; margin-bottom: 10px; transition: color .2s ease; }
 .foot-col a:hover { color: var(--coral-txt); }
-.foot-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; margin-top: clamp(44px, 6vw, 66px); padding-top: 24px; border-top: 1px solid var(--line); font-family: "Space Mono", monospace; font-size: .68rem; letter-spacing: .04em; color: var(--ink-3); }
+.foot-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; margin-top: clamp(44px, 6vw, 66px); padding-top: 24px; border-top: 1px solid var(--line); font-family: "Space Mono", monospace; font-size: .68rem; letter-spacing: .04em; color: var(--ink-3); }
+
+/* Crédito Adrian Web — firma discreta, AA en ambos modos */
+.aw-credit { display: inline-flex; align-items: center; gap: .5em; color: var(--ink-2); transition: color .25s ease; }
+.aw-credit strong { font-weight: 700; color: var(--ink); letter-spacing: .02em; }
+.aw-credit svg { width: 9px; height: 9px; opacity: .65; transition: transform .25s cubic-bezier(.4,0,.1,1); }
+.aw-credit:hover, .aw-credit:focus-visible { color: var(--coral-txt); }
+.aw-credit:hover strong, .aw-credit:focus-visible strong { color: var(--coral-txt); }
+.aw-credit:hover svg { transform: translate(2px,-2px); opacity: 1; }
+
+/* FooterReveal (preset 05, variante en flujo) — el contenido se despega y el
+   footer aparece por debajo. NO se usa el sticky del preset: con un footer más
+   alto que el viewport, `sticky bottom:0` recorta su parte superior y la
+   dirección/horario quedan inalcanzables. Aquí el cierre es puro CSS estático
+   + un lift sutil del bloque de marca (sólo escritorio). Cero riesgo en móvil. */
+main {
+  border-bottom-left-radius: clamp(18px, 3vw, 30px);
+  border-bottom-right-radius: clamp(18px, 3vw, 30px);
+  box-shadow: 0 30px 70px -34px rgba(0,0,0,.55);
+}
+footer { position: relative; z-index: 1; }
+/* El lift va sobre el logotipo, NO sobre .foot-brand: ese lleva .reveal, que
+   transiciona transform .9s, y un transform inline encima se arrastraría. */
+:root[data-foot-lift] .foot-brand .brand { will-change: transform; }
 
 /* ============================ REVEAL ============================ */
 .reveal { opacity: 0; transform: translateY(26px); transition: opacity .9s cubic-bezier(.2,.6,.2,1), transform .9s cubic-bezier(.2,.6,.2,1); }
@@ -341,6 +410,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
   .reveal { opacity: 1 !important; transform: none !important; }
   .marquee-track, .scroll-hint .bar, .pulse, .league .pulse, .info-row .now .pulse { animation: none !important; }
   .moment img { transition: none; }
+  .aurora span, .hero h1 .grad { animation: none !important; }
 }
 
 /* ============================ RESPONSIVE ============================ */
@@ -388,7 +458,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
 
 <!-- ============================ NAV ============================ -->
 <header class="nav" id="nav">
-  <a class="brand" href="#top" aria-label="Soul Café Bar, inicio">
+  <a class="brand" href="#top" aria-label="Soul Café Bar, inicio" data-i18n-attr="aria-label:a11y.home">
     <b>Soul</b><span class="dot" aria-hidden="true"></span><b>Café</b>
     <small>Benidorm</small>
   </a>
@@ -403,7 +473,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
     <button class="lang" id="langToggle" aria-label="Language / Idioma" title="English / Español">
       <span data-lang-es>ES</span><span class="sep" aria-hidden="true">/</span><span data-lang-en>EN</span>
     </button>
-    <button class="toggle" id="themeToggle" role="switch" aria-checked="false" aria-label="Cambiar entre modo día y noche" title="Modo día / noche">
+    <button class="toggle" id="themeToggle" role="switch" aria-checked="false" aria-label="Cambiar entre modo día y noche" title="Modo día / noche" data-i18n-attr="aria-label:a11y.theme;title:a11y.themeT">
       <span class="knob" aria-hidden="true">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v3M12 20v3M4.2 4.2l2 2M17.8 17.8l2 2M1 12h3M20 12h3M4.2 19.8l2-2M17.8 6.2l2-2"/></svg>
       </span>
@@ -412,7 +482,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 00-8.6 15l-1.3 4.8 4.9-1.3A10 10 0 1012 2zm0 1.7a8.3 8.3 0 11-4.2 15.5l-.3-.2-2.9.8.8-2.8-.2-.3A8.3 8.3 0 0112 3.7zm4.7 10.4c-.3-.1-1.5-.7-1.8-.8-.2-.1-.4-.1-.6.1-.2.3-.6.8-.8 1-.1.1-.3.2-.5.1-.3-.1-1.1-.4-2-1.3-.8-.7-1.3-1.5-1.4-1.8-.1-.2 0-.4.1-.5l.4-.5c.1-.2.2-.3.2-.5s0-.4-.1-.5c-.1-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.7.3-.2.3-.9.9-.9 2.1s.9 2.4 1 2.6c.1.2 1.8 2.7 4.3 3.7 1.6.6 2.2.7 2.9.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.2-.3-.2-.6-.4z"/></svg>
       <span data-i18n="nav.reservar">Reservar</span>
     </a>
-    <button class="nav-toggle-btn" id="burger" aria-label="Abrir menú" aria-expanded="false">
+    <button class="nav-toggle-btn" id="burger" aria-label="Abrir menú" aria-expanded="false" data-i18n-attr="aria-label:a11y.menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
   </div>
@@ -420,9 +490,10 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
 
 <!-- ============================ HERO ============================ -->
 <main id="top">
+<div class="aurora" aria-hidden="true"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
 <section class="hero">
   <div class="hero-bg">
-    <img id="heroImg" src="https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=1600&auto=format&fit=crop" alt="Cóctel recién preparado en la barra de Soul Café Bar, Benidorm" fetchpriority="high" />
+    <img id="heroImg" src="assets/img/soul-coctel.webp" alt="Cóctel recién preparado en la barra de Soul Café Bar, Benidorm" data-i18n-attr="alt:alt.hero" fetchpriority="high" />
   </div>
   <div class="hero-inner">
     <span class="eyebrow reveal" data-i18n="hero.eyebrow">El corazón de Benidorm</span>
@@ -462,7 +533,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
     </div>
     <div class="moments">
       <article class="moment reveal">
-        <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=1000&auto=format&fit=crop" alt="Café con leche recién servido para el desayuno" loading="lazy" />
+        <img src="assets/img/soul-cafe.webp" alt="Café con leche recién servido para el desayuno" data-i18n-attr="alt:alt.m1" loading="lazy" />
         <div class="moment-body">
           <span class="time" data-i18n="m1.time">08:00 · Mañana</span>
           <h3 data-i18n="m1.h3">Desayunos al sol</h3>
@@ -471,7 +542,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
         </div>
       </article>
       <article class="moment reveal d1">
-        <img src="https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?q=80&w=1000&auto=format&fit=crop" alt="Ambiente de fútbol en directo en el pub" loading="lazy" />
+        <img src="assets/img/soul-futbol.webp" alt="Ambiente de fútbol en directo en el pub" data-i18n-attr="alt:alt.m2" loading="lazy" />
         <div class="moment-body">
           <span class="time" data-i18n="m2.time">Kick-off · Tarde</span>
           <h3 data-i18n="m2.h3">Fútbol en directo</h3>
@@ -480,7 +551,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
         </div>
       </article>
       <article class="moment reveal d2">
-        <img src="https://images.unsplash.com/photo-1470337458703-46ad1756a187?q=80&w=1000&auto=format&fit=crop" alt="Cóctel de autor servido en la barra de noche" loading="lazy" />
+        <img src="assets/img/soul-coctel-noche.webp" alt="Cóctel de autor servido en la barra de noche" data-i18n-attr="alt:alt.m3" loading="lazy" />
         <div class="moment-body">
           <span class="time" data-i18n="m3.time">01:00 · Noche</span>
           <h3 data-i18n="m3.h3">Cócteles de autor</h3>
@@ -508,7 +579,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
     </div>
     <div class="about-media reveal d2">
       <div class="frame">
-        <img src="https://images.unsplash.com/photo-1572116469696-31de0f17cc34?q=80&w=1000&auto=format&fit=crop" alt="Interior acogedor de Soul Café Bar" loading="lazy" />
+        <img src="assets/img/soul-interior.webp" alt="Interior acogedor de Soul Café Bar" data-i18n-attr="alt:alt.about" loading="lazy" />
       </div>
       <div class="badge">
         <div class="mono" data-i18n="ab.badgeMono">Benidorm · Alicante</div>
@@ -521,7 +592,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
 <!-- ============================ FÚTBOL ============================ -->
 <section class="section match" id="futbol">
   <div class="match-bg">
-    <img src="https://images.unsplash.com/photo-1459865264687-595d652de67e?q=80&w=1600&auto=format&fit=crop" alt="Estadio de fútbol iluminado por la noche" loading="lazy" />
+    <img src="assets/img/soul-estadio.webp" alt="Estadio de fútbol iluminado por la noche" data-i18n-attr="alt:alt.match" loading="lazy" />
   </div>
   <div class="wrap match-inner">
     <span class="eyebrow reveal" data-i18n="fb.eyebrow">Match day</span>
@@ -598,7 +669,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
     </div>
     <div class="map-shell reveal d2">
       <div class="map-tag"><div class="mono" data-i18n="vi.tagMono">Estás invitado</div><div class="name" data-i18n="vi.tagName">Soul Café Bar</div></div>
-      <div id="map" role="img" aria-label="Mapa con la ubicación de Soul Café Bar en la calle del Esperanto 15, Benidorm"></div>
+      <div id="map" role="img" aria-label="Mapa con la ubicación de Soul Café Bar en la calle del Esperanto 15, Benidorm" data-i18n-attr="aria-label:a11y.map"></div>
     </div>
   </div>
 </section>
@@ -608,33 +679,38 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
 <footer>
   <div class="wrap">
     <div class="foot-top">
-      <div class="foot-brand">
+      <div class="foot-brand reveal">
         <span class="brand" style="font-size:1.7rem;"><b>Soul</b><span class="dot" aria-hidden="true"></span><b>Café</b></span>
         <p data-i18n="fo.tag">Desayunos, fútbol y cócteles en el corazón de Benidorm. Del café al cóctel, cada día.</p>
       </div>
       <div class="foot-cols">
-        <div class="foot-col">
+        <div class="foot-col reveal d1">
           <h4 data-i18n="fo.c1">Explora</h4>
           <a href="#dia" data-i18n="fo.l1">El día</a>
           <a href="#nosotros" data-i18n="fo.l2">Nosotros</a>
           <a href="#futbol" data-i18n="fo.l3">Fútbol en directo</a>
           <a href="#carta" data-i18n="fo.l4">La carta</a>
         </div>
-        <div class="foot-col">
+        <div class="foot-col reveal d2">
           <h4 data-i18n="fo.c2">Visita</h4>
           <p data-i18n="fo.addr" data-i18n-html>C. del Esperanto, 15<br>03503 Benidorm</p>
           <a href="tel:+34627353478">627 353 478</a>
           <a href="https://wa.me/34627353478" target="_blank" rel="noopener">WhatsApp</a>
         </div>
-        <div class="foot-col">
+        <div class="foot-col reveal d3">
           <h4 data-i18n="fo.c3">Horario</h4>
           <p data-i18n="fo.hours" data-i18n-html>Lun — Dom<br>08:00 — 01:00</p>
         </div>
       </div>
     </div>
-    <div class="foot-bottom">
+    <div class="foot-bottom reveal">
       <span>© 2026 Soul Café Bar · Benidorm</span>
       <span data-i18n="fo.bottomR">Del café al cóctel ✦ 08:00—01:00</span>
+      <a class="aw-credit" id="awCredit" target="_blank" rel="noopener noreferrer"
+         href="https://wa.me/34655334170?text=Hola%20Adrian%20%F0%9F%91%8B%20He%20visto%20una%20p%C3%A1gina%20hecha%20por%20Adrian%20Web%20y%20me%20gustar%C3%ADa%20trabajar%20contigo.%20%C2%BFHablamos%3F">
+        <span data-i18n="aw.credit">Web diseñada por</span> <strong>Adrian Web</strong>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
+      </a>
     </div>
   </div>
 </footer>
@@ -747,6 +823,20 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
     "vi.tagName":["Soul Café Bar","Soul Café Bar"],
     "open.now":["Abierto ahora","Open now"],
     "open.closed":["Cerrado ahora","Closed now"],
+    "open.checking":["Comprobando…","Checking…"],
+    "aw.credit":["Web diseñada por","Website designed by"],
+    "a11y.home":["Soul Café Bar, inicio","Soul Café Bar, home"],
+    "a11y.theme":["Cambiar entre modo día y noche","Switch between day and night mode"],
+    "a11y.themeT":["Modo día / noche","Day / night mode"],
+    "a11y.menu":["Abrir menú","Open menu"],
+    "a11y.menuClose":["Cerrar menú","Close menu"],
+    "a11y.map":["Mapa con la ubicación de Soul Café Bar en la calle del Esperanto 15, Benidorm","Map showing Soul Café Bar at Calle del Esperanto 15, Benidorm"],
+    "alt.hero":["Cóctel recién preparado en la barra de Soul Café Bar, Benidorm","A freshly made cocktail on the bar at Soul Café Bar, Benidorm"],
+    "alt.m1":["Café con leche recién servido para el desayuno","A freshly served white coffee at breakfast"],
+    "alt.m2":["Ambiente de fútbol en directo en el pub","Live football atmosphere in the pub"],
+    "alt.m3":["Cóctel de autor servido en la barra de noche","A signature cocktail served at the bar at night"],
+    "alt.about":["Interior acogedor de Soul Café Bar","The cosy interior of Soul Café Bar"],
+    "alt.match":["Estadio de fútbol iluminado por la noche","A floodlit football stadium at night"],
     "fo.tag":["Desayunos, fútbol y cócteles en el corazón de Benidorm. Del café al cóctel, cada día.","Breakfast, football and cocktails in the heart of Benidorm. From coffee to cocktails, every day."],
     "fo.c1":["Explora","Explore"],
     "fo.l1":["El día","The day"],
@@ -783,6 +873,12 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
     } catch (e) { el.style.display = 'none'; }
   }
 
+  /* Crédito Adrian Web — mensaje de WhatsApp prellenado en cada idioma */
+  var AW = {
+    es: "https://wa.me/34655334170?text=Hola%20Adrian%20%F0%9F%91%8B%20He%20visto%20una%20p%C3%A1gina%20hecha%20por%20Adrian%20Web%20y%20me%20gustar%C3%ADa%20trabajar%20contigo.%20%C2%BFHablamos%3F",
+    en: "https://wa.me/34655334170?text=Hi%20Adrian%20%F0%9F%91%8B%20I%20saw%20a%20website%20made%20by%20Adrian%20Web%20and%20I%27d%20like%20to%20work%20with%20you.%20Can%20we%20talk%3F"
+  };
+
   function applyLang(lang) {
     curLang = lang;
     root.dataset.lang = lang; root.setAttribute('lang', lang);
@@ -792,9 +888,21 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
       if (!pair) return;
       if (el.hasAttribute('data-i18n-html')) el.innerHTML = pair[i]; else el.textContent = pair[i];
     });
+    /* Atributos traducibles: alt de imágenes y aria-label/title de controles.
+       Formato: data-i18n-attr="alt:clave" o "aria-label:clave;title:otraClave" */
+    document.querySelectorAll('[data-i18n-attr]').forEach(function (el) {
+      el.getAttribute('data-i18n-attr').split(';').forEach(function (spec) {
+        var c = spec.indexOf(':'); if (c < 0) return;
+        var pair = D[spec.slice(c + 1).trim()];
+        if (pair) el.setAttribute(spec.slice(0, c).trim(), pair[i]);
+      });
+    });
+    var aw = document.getElementById('awCredit');
+    if (aw) aw.setAttribute('href', AW[lang] || AW.es);
     if (titles[lang]) document.title = titles[lang];
     var md = document.querySelector('meta[name="description"]');
     if (md && descs[lang]) md.setAttribute('content', descs[lang]);
+    document.querySelector('meta[property="og:locale"]').setAttribute('content', lang === 'en' ? 'en_GB' : 'es_ES');
     updateOpenNow();
   }
 
@@ -818,6 +926,8 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
   burger.addEventListener('click', function () {
     var open = links.classList.toggle('open');
     burger.setAttribute('aria-expanded', String(open));
+    var lbl = D[open ? 'a11y.menuClose' : 'a11y.menu'];
+    if (lbl) burger.setAttribute('aria-label', lbl[curLang === 'en' ? 1 : 0]);
     document.body.style.overflow = open ? 'hidden' : '';
   });
   links.querySelectorAll('a').forEach(function (a) {
@@ -830,6 +940,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
 
   /* ---------- Reveal on scroll ---------- */
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var liteMode = root.hasAttribute('data-lite');   /* saveData / gama baja / reduced-motion */
   if (reduce) {
     document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
   } else {
@@ -840,7 +951,7 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
   }
 
   /* ---------- Cursor glow (desktop, fine pointer) ---------- */
-  if (matchMedia('(pointer:fine)').matches && !reduce) {
+  if (matchMedia('(pointer:fine)').matches && !reduce && !liteMode) {
     var glow = document.getElementById('glow');
     var gx = 0, gy = 0, cx = 0, cy = 0, raf;
     window.addEventListener('mousemove', function (e) {
@@ -851,6 +962,74 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
       cx += (gx - cx) * 0.16; cy += (gy - cy) * 0.16;
       glow.style.transform = 'translate(' + cx + 'px,' + cy + 'px) translate(-50%,-50%)';
       raf = (Math.abs(gx - cx) > 0.5 || Math.abs(gy - cy) > 0.5) ? requestAnimationFrame(loop) : null;
+    }
+  }
+
+  /* ---------- Smooth scroll propio (preset SmoothScrollLenis, sin CDN) ----------
+     Sólo escritorio con puntero fino: en táctil se deja el scroll nativo, que es
+     más fluido en gama baja. Fuera en reduced-motion y en modo ligero.          */
+  if (!reduce && !liteMode && matchMedia('(pointer:fine)').matches && matchMedia('(min-width:821px)').matches) {
+    var docEl = document.documentElement;
+    docEl.style.scrollBehavior = 'auto';           /* evita pelear con el scroll nativo */
+    var sTarget = window.scrollY, sCur = sTarget, sRaf = 0, sRun = false;
+    var sMax = function () { return Math.max(0, docEl.scrollHeight - docEl.clientHeight); };
+    var sLoop = function () {
+      sCur += (sTarget - sCur) * 0.14;
+      if (Math.abs(sTarget - sCur) < 0.5) { sCur = sTarget; sRun = false; window.scrollTo(0, sCur); return; }
+      window.scrollTo(0, sCur);
+      sRaf = requestAnimationFrame(sLoop);
+    };
+    var sKick = function () { if (!sRun) { sRun = true; sRaf = requestAnimationFrame(sLoop); } };
+    var sSync = function () { if (!sRun) { sTarget = sCur = window.scrollY; } };
+    window.addEventListener('wheel', function (e) {
+      if (e.ctrlKey || e.defaultPrevented) return;
+      if (e.target && e.target.closest && e.target.closest('.leaflet-container')) return;
+      var dy = e.deltaMode === 1 ? e.deltaY * 16
+             : e.deltaMode === 2 ? e.deltaY * docEl.clientHeight
+             : e.deltaY;
+      e.preventDefault();
+      sTarget = Math.min(sMax(), Math.max(0, sTarget + dy));
+      sKick();
+    }, { passive: false });
+    window.addEventListener('keydown', sSync);
+    window.addEventListener('mousedown', sSync);
+    window.addEventListener('resize', function () { sTarget = sCur = window.scrollY; }, { passive: true });
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[href^="#"]');
+      if (!a) return;
+      var id = a.getAttribute('href');
+      if (!id || id.length < 2) return;
+      var el = document.querySelector(id);
+      if (!el) return;
+      e.preventDefault();
+      sTarget = Math.min(sMax(), Math.max(0, el.getBoundingClientRect().top + window.scrollY - 74));
+      sKick();
+      try { history.pushState(null, '', id); } catch (err) {}
+    });
+  }
+
+  /* ---------- Cierre del footer (FooterReveal, parallax opcional) ----------
+     Lift muy sutil del bloque de marca mientras el footer entra. Sólo escritorio
+     con puntero fino: así la barra de URL del móvil no entra en la ecuación y el
+     progreso nunca salta. Progreso medido con getBoundingClientRect del propio
+     footer + clientHeight (nunca window.innerHeight).                           */
+  if (!reduce && !liteMode && matchMedia('(pointer:fine)').matches && matchMedia('(min-width:821px)').matches) {
+    var foot = document.querySelector('footer');
+    var brandBlock = document.querySelector('.foot-brand .brand');
+    if (foot && brandBlock) {
+      root.setAttribute('data-foot-lift', '');
+      var fRaf = 0;
+      var fUpd = function () {
+        fRaf = 0;
+        var vh = document.documentElement.clientHeight;
+        var r = foot.getBoundingClientRect();
+        var p = Math.min(1, Math.max(0, 1 - r.top / vh));
+        brandBlock.style.transform = 'translate3d(0,' + ((1 - p) * 34).toFixed(1) + 'px,0)';
+      };
+      var fOn = function () { if (!fRaf) fRaf = requestAnimationFrame(fUpd); };
+      window.addEventListener('scroll', fOn, { passive: true });
+      window.addEventListener('resize', fOn, { passive: true });
+      fUpd();
     }
   }
 
@@ -873,5 +1052,6 @@ footer { background: var(--bg-3); border-top: 1px solid var(--line); padding: cl
   })();
 })();
 </script>
+<script src="chatbot-widget/loader.js" data-gemini-key="TU_API_KEY"></script>
 </body>
 </html>

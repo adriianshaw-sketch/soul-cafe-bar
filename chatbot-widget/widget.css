@@ -1,0 +1,504 @@
+/* ============================================================================
+   Chatbot Widget — widget.css
+   Todos los estilos van con prefijo .cbw- para no pisar el CSS de la web host.
+   Diseñado en modo claro Y oscuro (parity real, no un modo de relleno).
+   Se inyecta desde loader.js.
+   ============================================================================ */
+
+/* ---- Tokens (modo claro por defecto) --------------------------------------
+   El tema real (light/dark) lo fija widget.js con [data-cbw-theme] sobre .cbw-root,
+   detectando el fondo de la web host. El media query es solo un respaldo por si
+   el JS no llegara a ejecutarse. */
+.cbw-root {
+  /* Acento morado. #635beb (no el #6c63ff original) para que blanco sobre él
+     dé 4.97:1 (AA de texto normal); #6c63ff se quedaba en 4.32:1 y fallaba. */
+  --cbw-accent: #635beb;
+  --cbw-accent-ink: #ffffff;
+  --cbw-brand: #0f0f1a;
+
+  --cbw-panel-bg: #ffffff;
+  --cbw-panel-border: rgba(15, 15, 26, 0.08);
+  --cbw-surface: #f6f6fb;
+  --cbw-bot-bubble: #f0f0f5;
+  --cbw-bot-ink: #1a1a24;
+  --cbw-user-ink: #ffffff;
+  --cbw-text: #16161d;
+  --cbw-muted: #6b6b78;
+  --cbw-input-bg: #ffffff;
+  --cbw-input-border: rgba(15, 15, 26, 0.14);
+  --cbw-divider: rgba(15, 15, 26, 0.08);
+  --cbw-shadow: 0 18px 50px -12px rgba(15, 15, 26, 0.32), 0 4px 14px -6px rgba(15, 15, 26, 0.2);
+  --cbw-fab-shadow: 0 10px 30px -8px rgba(15, 15, 26, 0.5);
+  --cbw-open: #16b364;
+  --cbw-closed: #98989f;
+
+  /* geometría */
+  --cbw-radius: 20px;
+  --cbw-bubble-radius: 16px;
+  --cbw-gap-edge: 20px;
+
+  /* tipografía: se hereda de la web anfitriona para que el chat parezca parte del sitio */
+  --cbw-font: inherit;
+
+  font-family: var(--cbw-font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- Modo oscuro ---------------------------------------------------------- */
+.cbw-root[data-cbw-theme="dark"] {
+  --cbw-brand: #0b0b12;
+  --cbw-panel-bg: #14141c;
+  --cbw-panel-border: rgba(255, 255, 255, 0.08);
+  --cbw-surface: #1a1a24;
+  --cbw-bot-bubble: #23232f;
+  --cbw-bot-ink: #ececf2;
+  --cbw-user-ink: #ffffff;
+  --cbw-text: #ececf2;
+  --cbw-muted: #9a9aa8;
+  --cbw-input-bg: #1a1a24;
+  --cbw-input-border: rgba(255, 255, 255, 0.14);
+  --cbw-divider: rgba(255, 255, 255, 0.08);
+  --cbw-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.7), 0 4px 14px -6px rgba(0, 0, 0, 0.6);
+  --cbw-fab-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
+  --cbw-closed: #6b6b78;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cbw-root:not([data-cbw-theme="light"]) {
+    --cbw-brand: #0b0b12;
+    --cbw-panel-bg: #14141c;
+    --cbw-panel-border: rgba(255, 255, 255, 0.08);
+    --cbw-surface: #1a1a24;
+    --cbw-bot-bubble: #23232f;
+    --cbw-bot-ink: #ececf2;
+    --cbw-text: #ececf2;
+    --cbw-muted: #9a9aa8;
+    --cbw-input-bg: #1a1a24;
+    --cbw-input-border: rgba(255, 255, 255, 0.14);
+    --cbw-divider: rgba(255, 255, 255, 0.08);
+    --cbw-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.7), 0 4px 14px -6px rgba(0, 0, 0, 0.6);
+    --cbw-fab-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
+    --cbw-closed: #6b6b78;
+  }
+}
+
+/* ---- Root fijo (no hereda ni filtra estilos de la web) -------------------- */
+.cbw-root,
+.cbw-root * {
+  box-sizing: border-box;
+}
+.cbw-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000; /* por encima de casi todo, por debajo del máximo entero */
+  pointer-events: none; /* solo los hijos concretos capturan clics */
+}
+/* Reset de botones envuelto en :where() => especificidad 0. Así NUNCA gana a
+   las reglas de cada componente (.cbw-fab, .cbw-send, .cbw-chip…), que son
+   (0,1,0). Si esto fuera ".cbw-root button" (0,1,1) machacaría sus fondos y
+   paddings. [lección aprendida: reset de widget siempre por debajo de sus hijos] */
+:where(.cbw-root button) {
+  font-family: inherit;
+  cursor: pointer;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ============================================================================
+   BOTÓN FLOTANTE (FAB)
+   ============================================================================ */
+.cbw-fab {
+  pointer-events: auto;
+  position: fixed;
+  right: var(--cbw-gap-edge);
+  bottom: calc(var(--cbw-gap-edge) + env(safe-area-inset-bottom, 0px));
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--cbw-brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--cbw-fab-shadow);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+  will-change: transform;
+}
+.cbw-fab:hover { transform: scale(1.08); }
+.cbw-fab:active { transform: scale(0.96); }
+.cbw-fab:focus-visible {
+  outline: 3px solid var(--cbw-accent);
+  outline-offset: 3px;
+}
+.cbw-fab svg { width: 26px; height: 26px; display: block; }
+.cbw-fab .cbw-fab-icon-close { display: none; }
+
+/* cuando el panel está abierto, el FAB muestra la X */
+.cbw-root.cbw-is-open .cbw-fab .cbw-fab-icon-chat { display: none; }
+.cbw-root.cbw-is-open .cbw-fab .cbw-fab-icon-close { display: block; }
+
+/* Pulso de aviso, UNA sola vez (se retira desde JS tras la primera visita) */
+.cbw-fab.cbw-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 var(--cbw-accent);
+  animation: cbw-pulse 2.2s cubic-bezier(0.66, 0, 0, 1) 3;
+}
+@keyframes cbw-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(108, 99, 255, 0.55); }
+  70%  { box-shadow: 0 0 0 16px rgba(108, 99, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(108, 99, 255, 0); }
+}
+
+/* ============================================================================
+   PANEL DE CHAT
+   ============================================================================ */
+.cbw-panel {
+  pointer-events: auto;
+  position: fixed;
+  right: var(--cbw-gap-edge);
+  bottom: calc(var(--cbw-gap-edge) + 56px + 14px + env(safe-area-inset-bottom, 0px));
+  width: 380px;
+  height: 520px;
+  max-height: calc(100vh - 40px);
+  background: var(--cbw-panel-bg);
+  border: 1px solid var(--cbw-panel-border);
+  border-radius: var(--cbw-radius);
+  box-shadow: var(--cbw-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform-origin: bottom right;
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.25s;
+}
+.cbw-root.cbw-is-open .cbw-panel {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
+}
+
+/* ---- Header --------------------------------------------------------------- */
+.cbw-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  color: #fff;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(108, 99, 255, 0.45), transparent 60%),
+    var(--cbw-brand);
+}
+.cbw-avatar {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+  background: linear-gradient(135deg, var(--cbw-accent), #4b45c9);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  text-transform: uppercase;
+}
+.cbw-head-text { min-width: 0; flex: 1 1 auto; }
+.cbw-title {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cbw-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.2;
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.72);
+}
+.cbw-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cbw-closed);
+  flex: 0 0 auto;
+}
+.cbw-status.cbw-open .cbw-status-dot {
+  background: var(--cbw-open);
+  box-shadow: 0 0 0 3px rgba(22, 179, 100, 0.22);
+}
+.cbw-close {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.85);
+  transition: background 0.18s ease;
+}
+.cbw-close:hover { background: rgba(255, 255, 255, 0.14); }
+.cbw-close:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+
+/* Foco de teclado visible en TODO lo interactivo (enviar, chips, WhatsApp,
+   Llamar). Sin esto, quien navegue con Tab no ve dónde está. */
+.cbw-send:focus-visible,
+.cbw-chip:focus-visible,
+.cbw-action:focus-visible {
+  outline: 2px solid var(--cbw-accent);
+  outline-offset: 2px;
+}
+.cbw-send:focus-visible { outline-color: var(--cbw-text); }
+.cbw-close svg { width: 18px; height: 18px; }
+
+/* ---- Zona de mensajes ----------------------------------------------------- */
+.cbw-messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--cbw-panel-bg);
+  overscroll-behavior: contain;
+}
+.cbw-messages::-webkit-scrollbar { width: 8px; }
+.cbw-messages::-webkit-scrollbar-thumb {
+  background: var(--cbw-divider);
+  border-radius: 8px;
+}
+
+.cbw-row { display: flex; width: 100%; }
+.cbw-row.cbw-user { justify-content: flex-end; }
+.cbw-row.cbw-bot { justify-content: flex-start; }
+
+/* Columna interior: apila la burbuja y (si toca) los botones de fallback debajo,
+   en vez de ponerlos al lado de la burbuja. */
+.cbw-col { display: flex; flex-direction: column; max-width: 82%; min-width: 0; }
+.cbw-user .cbw-col { align-items: flex-end; }
+.cbw-bot .cbw-col { align-items: flex-start; }
+
+.cbw-bubble {
+  max-width: 100%;
+  padding: 10px 13px;
+  font-size: 14.5px;
+  line-height: 1.45;
+  border-radius: var(--cbw-bubble-radius);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  animation: cbw-bubble-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cbw-user .cbw-bubble {
+  background: var(--cbw-accent);
+  color: var(--cbw-user-ink);
+  border-bottom-right-radius: 5px;
+}
+.cbw-bot .cbw-bubble {
+  background: var(--cbw-bot-bubble);
+  color: var(--cbw-bot-ink);
+  border-bottom-left-radius: 5px;
+}
+@keyframes cbw-bubble-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Botones de fallback (WhatsApp / Llamar) bajo un mensaje del bot */
+.cbw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cbw-action {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+.cbw-action:active { transform: scale(0.97); }
+.cbw-action svg { width: 16px; height: 16px; }
+.cbw-action-wa {
+  background: #25d366;
+  color: #06301a;
+}
+.cbw-action-wa:hover { filter: brightness(1.05); }
+.cbw-action-call {
+  background: var(--cbw-surface);
+  color: var(--cbw-text);
+  border: 1px solid var(--cbw-input-border);
+}
+.cbw-action-call:hover { filter: brightness(0.98); }
+
+/* Indicador "escribiendo…" */
+.cbw-typing {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--cbw-bot-bubble);
+  border-radius: var(--cbw-bubble-radius);
+  border-bottom-left-radius: 5px;
+}
+.cbw-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cbw-muted);
+  opacity: 0.5;
+  animation: cbw-typing 1.2s infinite ease-in-out;
+}
+.cbw-typing span:nth-child(2) { animation-delay: 0.18s; }
+.cbw-typing span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes cbw-typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ---- Sugerencias iniciales (chips) --------------------------------------- */
+.cbw-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 2px 2px 8px;
+}
+.cbw-chip {
+  pointer-events: auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cbw-text);
+  background: var(--cbw-surface);
+  border: 1px solid var(--cbw-input-border);
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+.cbw-chip:hover { filter: brightness(0.98); }
+.cbw-chip:active { transform: scale(0.97); }
+
+/* ---- Barra de entrada ----------------------------------------------------- */
+.cbw-inputbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--cbw-divider);
+  background: var(--cbw-panel-bg);
+}
+.cbw-textarea {
+  flex: 1 1 auto;
+  resize: none;
+  max-height: 96px;
+  min-height: 42px;
+  padding: 11px 14px;
+  font-family: inherit;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--cbw-text);
+  background: var(--cbw-input-bg);
+  border: 1px solid var(--cbw-input-border);
+  border-radius: 14px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.cbw-textarea::placeholder { color: var(--cbw-muted); }
+.cbw-textarea:focus {
+  border-color: var(--cbw-accent);
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.18);
+}
+.cbw-send {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--cbw-accent);
+  color: var(--cbw-accent-ink);
+  display: grid;
+  place-items: center;
+  transition: transform 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
+}
+.cbw-send:hover { filter: brightness(1.06); }
+.cbw-send:active { transform: scale(0.94); }
+.cbw-send:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+.cbw-send svg { width: 20px; height: 20px; }
+
+.cbw-footer {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.2px;
+  color: var(--cbw-muted);
+  padding: 0 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: var(--cbw-panel-bg);
+}
+.cbw-footer b { font-weight: 600; color: var(--cbw-text); opacity: 0.75; }
+
+/* ============================================================================
+   MÓVIL (≤480px): ventana casi a pantalla completa, pegada abajo, 100dvh
+   ============================================================================ */
+@media (max-width: 480px) {
+  .cbw-panel {
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 92dvh;
+    max-height: 92dvh;
+    border-radius: 22px 22px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    transform-origin: bottom center;
+    transform: translateY(100%);
+  }
+  .cbw-root.cbw-is-open .cbw-panel { transform: translateY(0); }
+  .cbw-fab {
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  /* En móvil el panel es pantalla completa: cerramos con la X del header,
+     así que el FAB se oculta mientras está abierto (no debe flotar encima). */
+  .cbw-root.cbw-is-open .cbw-fab { display: none; }
+  /* bloquea el scroll del fondo mientras el chat está abierto */
+  html.cbw-lock, html.cbw-lock body { overflow: hidden !important; }
+}
+
+/* ============================================================================
+   Accesibilidad: movimiento reducido
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .cbw-fab,
+  .cbw-panel,
+  .cbw-bubble,
+  .cbw-action,
+  .cbw-send,
+  .cbw-chip { transition: none !important; animation: none !important; }
+  .cbw-fab.cbw-pulse::after { animation: none !important; }
+  .cbw-typing span { animation: none !important; opacity: 0.7; }
+}
