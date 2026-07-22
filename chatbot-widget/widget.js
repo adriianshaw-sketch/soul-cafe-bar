@@ -28,22 +28,27 @@
    * =======================================================================*/
   var CFG = window.CBW_CONFIG || {};
 
-  // --- Modelo de Gemini ----------------------------------------------------
-  // Por defecto el ALIAS "gemini-flash-lite-latest" (hoy = gemini-3.1-flash-lite):
-  //  · se actualiza solo al Flash-Lite más reciente (cero mantenimiento), y
-  //  · su CUOTA GRATIS es MUCHO más alta que la del flash tope de gama
-  //    (gemini-3.5-flash free tier = solo 20 peticiones/día → un negocio lo
-  //    agota en una tarde). La cuota es POR MODELO, así que Lite tiene su propio
-  //    cupo, amplio. Para esta tarea (leer la web y responder) Lite sobra.
-  // Si algún día quieres más "cabeza" (horarios muy enrevesados) y tienes
-  // facturación activada, pon data-gemini-model="gemini-flash-latest".
-  // Nota: Google apaga modelos con frecuencia (1.5 y 2.0 ya no van); si deja de
-  // responder, revisa el nombre vigente en ai.google.dev/gemini-api/docs/models.
-  var GEMINI_MODEL = CFG.model || 'gemini-flash-lite-latest';
+  // --- Modelos de Gemini (con fallback en cadena) --------------------------
+  // Se prueban EN ORDEN. Si el primero da 429 (cuota agotada) o 404 (modelo
+  // retirado), salta al siguiente — que tiene su PROPIA cuota. Así el widget
+  // aguanta a la vez el churn de modelos de Google y los topes del plan gratis.
+  // Por qué Flash-Lite primero: su cuota GRATIS es enorme frente al flash tope
+  // de gama (gemini-3.5-flash free = solo 20 peticiones/día, se agota en una
+  // tarde y el bot deja de responder; flash-lite ≈ 1.000-1.500/día). Para leer
+  // la web y responder, Lite sobra. data-gemini-model fuerza uno concreto.
+  var MODELS = (CFG.model ? [CFG.model] : [])
+    .concat(['gemini-flash-lite-latest', 'gemini-flash-latest']);
+  MODELS = MODELS.filter(function (m, i) { return m && MODELS.indexOf(m) === i; });
 
-  var GEMINI_ENDPOINT =
-    'https://generativelanguage.googleapis.com/v1beta/models/' +
-    encodeURIComponent(GEMINI_MODEL) + ':generateContent';
+  function endpointFor(model) {
+    return 'https://generativelanguage.googleapis.com/v1beta/models/' +
+      encodeURIComponent(model) + ':generateContent';
+  }
+
+  // Proxy opcional (data-endpoint): si se define, el widget NO manda la key al
+  // navegador; hace POST {model, body} a tu proxy (p.ej. un Cloudflare Worker,
+  // ver worker.js + README) y es este quien guarda la key. Es la forma SEGURA.
+  var PROXY = CFG.endpoint || '';
 
   var API_KEY = CFG.key || '';
   var ACCENT = CFG.accent || '';        // opcional: color de acento por marca
@@ -75,48 +80,72 @@
    * =======================================================================*/
   var LOCALE = detectLocale();
   var I18N = {
-    es: { placeholder:'Escribe tu mensaje…', online:'En línea', open:'Abierto', closed:'Cerrado',
-          send:'Enviar', close:'Cerrar', wa:'Escribir por WhatsApp', call:'Llamar',
+    es: { placeholder:'Escribe tu pregunta…', online:'En línea', open:'Abierto', closed:'Cerrado',
+          send:'Enviar', close:'Cerrar', ask:'Pregúntanos', you:'Tú',
+          dialog:'Asistente de atención al cliente',
+          noInfo:'No tengo ese dato exacto en la web, pero el negocio puede ayudarte directamente:',
+          wa:'Escribir por WhatsApp', call:'Llamar',
           apiError:'Ahora mismo no puedo responder. Inténtalo de nuevo o escríbenos por WhatsApp.',
-          greet:'¡Hola! 👋 Soy el asistente de {name}. ¿En qué puedo ayudarte?',
+          apiBusy:'Estamos recibiendo muchas consultas ahora mismo. Prueba en un momento o escríbenos por WhatsApp.',
+          greet:'Hola, soy el asistente de {name}. Cuéntame qué necesitas saber.',
           waIntro:'Hola, vengo de la página web y tengo una duda: ',
-          credit:'Asistente con IA' ,
-          sugg:['¿Qué servicios ofrecéis?','¿Estáis abiertos ahora?','¿Dónde estáis?'] },
-    en: { placeholder:'Type your message…', online:'Online', open:'Open', closed:'Closed',
-          send:'Send', close:'Close', wa:'Message on WhatsApp', call:'Call',
+          credit:'Asistente con IA',
+          sugg:['¿Qué ofrecéis?','¿Estáis abiertos ahora?','¿Dónde estáis?'] },
+    en: { placeholder:'Type your question…', online:'Online', open:'Open', closed:'Closed',
+          send:'Send', close:'Close', ask:'Ask us', you:'You',
+          dialog:'Customer support assistant',
+          noInfo:"I don't have that exact detail on the site, but the business can help you directly:",
+          wa:'Message on WhatsApp', call:'Call',
           apiError:"I can't reply right now. Please try again or message us on WhatsApp.",
-          greet:'Hi! 👋 I\'m {name}\'s assistant. How can I help?',
+          apiBusy:"We're getting a lot of questions right now. Try again in a moment or message us on WhatsApp.",
+          greet:'Hi, I\'m {name}\'s assistant. Tell me what you\'d like to know.',
           waIntro:'Hi, I\'m coming from your website and I have a question: ',
           credit:'AI assistant',
           sugg:['What do you offer?','Are you open now?','Where are you?'] },
-    fr: { placeholder:'Écrivez votre message…', online:'En ligne', open:'Ouvert', closed:'Fermé',
-          send:'Envoyer', close:'Fermer', wa:'Écrire sur WhatsApp', call:'Appeler',
+    fr: { placeholder:'Écrivez votre question…', online:'En ligne', open:'Ouvert', closed:'Fermé',
+          send:'Envoyer', close:'Fermer', ask:'Une question ?', you:'Vous',
+          dialog:'Assistant du service client',
+          noInfo:"Je n'ai pas cette information exacte sur le site, mais l'entreprise peut vous aider directement :",
+          wa:'Écrire sur WhatsApp', call:'Appeler',
           apiError:"Je ne peux pas répondre pour le moment. Réessayez ou écrivez-nous sur WhatsApp.",
-          greet:'Bonjour ! 👋 Je suis l\'assistant de {name}. Comment puis-je aider ?',
+          apiBusy:"Nous recevons beaucoup de questions en ce moment. Réessayez dans un instant ou écrivez-nous sur WhatsApp.",
+          greet:'Bonjour, je suis l\'assistant de {name}. Dites-moi ce que vous cherchez.',
           waIntro:'Bonjour, je viens de votre site web et j\'ai une question : ',
           credit:'Assistant IA',
-          sugg:['Quels services proposez-vous ?','Êtes-vous ouverts ?','Où êtes-vous ?'] },
-    de: { placeholder:'Nachricht schreiben…', online:'Online', open:'Geöffnet', closed:'Geschlossen',
-          send:'Senden', close:'Schließen', wa:'Auf WhatsApp schreiben', call:'Anrufen',
+          sugg:['Que proposez-vous ?','Êtes-vous ouverts ?','Où êtes-vous ?'] },
+    de: { placeholder:'Ihre Frage…', online:'Online', open:'Geöffnet', closed:'Geschlossen',
+          send:'Senden', close:'Schließen', ask:'Frag uns', you:'Du',
+          dialog:'Kundenservice-Assistent',
+          noInfo:'Diese genaue Angabe steht nicht auf der Seite, aber das Unternehmen hilft dir direkt weiter:',
+          wa:'Auf WhatsApp schreiben', call:'Anrufen',
           apiError:'Ich kann gerade nicht antworten. Bitte erneut versuchen oder per WhatsApp schreiben.',
-          greet:'Hallo! 👋 Ich bin der Assistent von {name}. Wie kann ich helfen?',
+          apiBusy:'Wir erhalten gerade sehr viele Anfragen. Versuchen Sie es gleich erneut oder schreiben Sie uns per WhatsApp.',
+          greet:'Hallo, ich bin der Assistent von {name}. Sag mir, was du wissen möchtest.',
           waIntro:'Hallo, ich komme von Ihrer Website und habe eine Frage: ',
           credit:'KI-Assistent',
           sugg:['Was bieten Sie an?','Haben Sie geöffnet?','Wo befinden Sie sich?'] },
-    it: { placeholder:'Scrivi il tuo messaggio…', online:'Online', open:'Aperto', closed:'Chiuso',
-          send:'Invia', close:'Chiudi', wa:'Scrivi su WhatsApp', call:'Chiama',
+    it: { placeholder:'Scrivi la tua domanda…', online:'Online', open:'Aperto', closed:'Chiuso',
+          send:'Invia', close:'Chiudi', ask:'Chiedici', you:'Tu',
+          dialog:'Assistente clienti',
+          noInfo:'Non ho questo dato preciso sul sito, ma l\'attività può aiutarti direttamente:',
+          wa:'Scrivi su WhatsApp', call:'Chiama',
           apiError:'Non posso rispondere ora. Riprova o scrivici su WhatsApp.',
-          greet:'Ciao! 👋 Sono l\'assistente di {name}. Come posso aiutarti?',
+          apiBusy:'Stiamo ricevendo molte richieste in questo momento. Riprova tra poco o scrivici su WhatsApp.',
+          greet:'Ciao, sono l\'assistente di {name}. Dimmi di cosa hai bisogno.',
           waIntro:'Ciao, vengo dal vostro sito web e ho una domanda: ',
           credit:'Assistente IA',
-          sugg:['Che servizi offrite?','Siete aperti ora?','Dove siete?'] },
-    pt: { placeholder:'Escreve a tua mensagem…', online:'Online', open:'Aberto', closed:'Fechado',
-          send:'Enviar', close:'Fechar', wa:'Escrever no WhatsApp', call:'Ligar',
+          sugg:['Cosa offrite?','Siete aperti ora?','Dove siete?'] },
+    pt: { placeholder:'Escreve a tua pergunta…', online:'Online', open:'Aberto', closed:'Fechado',
+          send:'Enviar', close:'Fechar', ask:'Pergunta-nos', you:'Tu',
+          dialog:'Assistente de apoio ao cliente',
+          noInfo:'Não tenho esse dado exato no site, mas o negócio pode ajudar-te diretamente:',
+          wa:'Escrever no WhatsApp', call:'Ligar',
           apiError:'Não consigo responder agora. Tenta de novo ou escreve-nos no WhatsApp.',
-          greet:'Olá! 👋 Sou o assistente de {name}. Como posso ajudar?',
+          apiBusy:'Estamos a receber muitas perguntas agora. Tenta daqui a pouco ou escreve-nos no WhatsApp.',
+          greet:'Olá, sou o assistente de {name}. Diz-me o que precisas de saber.',
           waIntro:'Olá, venho do vosso site e tenho uma dúvida: ',
           credit:'Assistente com IA',
-          sugg:['Que serviços oferecem?','Estão abertos agora?','Onde estão?'] }
+          sugg:['O que oferecem?','Estão abertos agora?','Onde estão?'] }
   };
   var T = I18N[LOCALE] || I18N.es;
 
@@ -144,7 +173,9 @@
    * =======================================================================*/
   // Texto visible, ignorando nav/footer/scripts y NUESTRO propio widget.
   function extractPageContent() {
-    var skip = ['script','style','nav','footer','noscript','iframe','svg','template'];
+    // Nota: NO saltamos <footer>: negocios locales ponen ahí horario/dirección
+    // muy a menudo. Sí saltamos nav/scripts/etc.
+    var skip = ['script','style','nav','noscript','iframe','svg','template'];
     if (!document.body) return '';
     var walker = document.createTreeWalker(
       document.body,
@@ -229,52 +260,89 @@
     return text.trim();
   }
 
-  function callGemini(body) { return doGemini(body, {}); }
-
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-  // Dos reintentos defensivos, UNA vez cada uno:
-  //  · 400 rechazando un campo de generationConfig (p.ej. thinkingConfig si un
-  //    modelo futuro deja de soportarlo) -> se quita el campo y se reintenta.
-  //  · 429/503 (límite por minuto o sobrecarga puntual, típico si entran varios
-  //    clientes a la vez) -> espera corta y reintenta. Si es la cuota DIARIA,
-  //    volverá a fallar y se muestra el fallback de WhatsApp, que es lo correcto.
-  function doGemini(body, tried) {
+  // Clasifica el fallo para poder actuar distinto según la causa.
+  //  auth    -> la KEY no vale / está restringida (401/403, o 400 de api key)
+  //  quota   -> cuota agotada (429)  -> probar otro modelo
+  //  model   -> modelo retirado (404) -> probar otro modelo
+  //  network -> caída/timeout/CORS
+  function classifyError(status, bodyText) {
+    var b = (bodyText || '').toLowerCase();
+    if (status === 401 || status === 403) return 'auth';
+    if (status === 400 && (b.indexOf('api key') >= 0 || b.indexOf('api_key') >= 0 ||
+        b.indexOf('permission') >= 0 || b.indexOf('unregistered') >= 0)) return 'auth';
+    if (status === 429) return 'quota';
+    if (status === 404) return 'model';
+    return 'other';
+  }
+
+  // Punto de entrada: intenta los modelos de la lista en orden. Un 429/404 en
+  // uno hace saltar al siguiente (cuota independiente / resistencia al churn).
+  function callGemini(body) { return tryModels(body, 0, {}); }
+
+  function tryModels(body, idx, memo) {
+    return doGemini(body, MODELS[idx], {}).catch(function (err) {
+      var canFallback = (err.kind === 'quota' || err.kind === 'model') && idx + 1 < MODELS.length;
+      if (canFallback) {
+        if (window.console) console.info('[cbw] "' + MODELS[idx] + '" (' + err.kind +
+          '); probando "' + MODELS[idx + 1] + '"');
+        return tryModels(body, idx + 1, memo);
+      }
+      throw err;
+    });
+  }
+
+  // Una llamada concreta a un modelo. Reintentos defensivos (una vez cada uno):
+  //  · 400 que menciona "thinking" -> quita thinkingConfig y reintenta.
+  //  · 429/503 puntual -> espera corta y reintenta el MISMO modelo una vez.
+  function doGemini(body, model, retried) {
+    var url = PROXY || endpointFor(model);
+    var headers = { 'Content-Type': 'application/json' };
+    var payload;
+    if (PROXY) {
+      // Modo seguro: la key la pone el proxy; aquí solo va modelo + cuerpo.
+      payload = JSON.stringify({ model: model, body: body });
+    } else {
+      headers['x-goog-api-key'] = API_KEY; // en cabecera, nunca en la URL
+      payload = JSON.stringify(body);
+    }
     var ctrl = new AbortController();
     var timer = setTimeout(function () { ctrl.abort(); }, REQUEST_TIMEOUT);
     var done = function () { clearTimeout(timer); };
-    return fetch(GEMINI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': API_KEY   // la key va en cabecera, nunca en la URL
-      },
-      body: JSON.stringify(body),
-      signal: ctrl.signal
-    }).then(function (res) {
-      if (!res.ok) {
-        return res.text().then(function (t) {
-          // 400 por un campo no soportado -> quitarlo y reintentar
-          if (!tried.noThink && res.status === 400 && body.generationConfig &&
-              body.generationConfig.thinkingConfig) {
+    return fetch(url, { method: 'POST', headers: headers, body: payload, signal: ctrl.signal })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.text().then(function (t) {
+            // 400 con thinkingConfig presente -> quítalo y reintenta. (Los modelos
+            // Lite lo rechazan con un 400 genérico que NO menciona "thinking", así
+            // que NO condicionamos al texto: si está el campo y hay 400, se prueba
+            // sin él una vez. Si el 400 era por otra causa, volverá a fallar y se
+            // clasifica bien.)
+            if (!retried.noThink && res.status === 400 &&
+                body.generationConfig && body.generationConfig.thinkingConfig) {
+              done(); retried.noThink = true;
+              var b2 = JSON.parse(JSON.stringify(body));
+              delete b2.generationConfig.thinkingConfig;
+              return doGemini(b2, model, retried);
+            }
+            if (!retried.rate && (res.status === 429 || res.status === 503)) {
+              done(); retried.rate = true;
+              return wait(1200).then(function () { return doGemini(body, model, retried); });
+            }
             done();
-            tried.noThink = true;
-            var b2 = JSON.parse(JSON.stringify(body));
-            delete b2.generationConfig.thinkingConfig;
-            return doGemini(b2, tried);
-          }
-          // 429/503 transitorio -> espera corta y un solo reintento
-          if (!tried.rate && (res.status === 429 || res.status === 503)) {
-            done();
-            tried.rate = true;
-            return wait(1500).then(function () { return doGemini(body, tried); });
-          }
-          done();
-          throw new Error('Gemini ' + res.status + ': ' + t.slice(0, 200));
-        });
-      }
-      return res.json().then(function (data) { done(); return extractText(data); });
-    }, function (err) { done(); throw err; });
+            var e = new Error('Gemini ' + res.status + ': ' + t.slice(0, 180));
+            e.status = res.status;
+            e.kind = classifyError(res.status, t);
+            throw e;
+          });
+        }
+        return res.json().then(function (data) { done(); return extractText(data); });
+      }, function (err) {
+        done();
+        if (!err.kind) err.kind = 'network'; // abort/timeout/CORS/caída
+        throw err;
+      });
   }
 
   /* =========================================================================
@@ -311,7 +379,7 @@
   function buildBusinessData() {
     var cached = ssGet(SS_BUSINESS, null);
     if (cached) return Promise.resolve(cached);
-    if (!API_KEY) return Promise.resolve(fallbackBusiness());
+    if (!API_KEY && !PROXY) return Promise.resolve(fallbackBusiness());
 
     var pageText = allPagesText();
     var jsonld = extractJsonLd();
@@ -453,7 +521,10 @@
     var estado = st ? st.texto : 'horario no publicado en la web';
 
     return [
-      'Eres el asistente virtual de "' + (biz.nombreNegocio || 'este negocio') + '".',
+      'Eres parte del equipo de "' + (biz.nombreNegocio || 'este negocio') + '" y atiendes a',
+      'sus clientes por el chat de la web. Hablas como una persona real del negocio: cercano,',
+      'natural y con calidez, en primera persona del plural ("tenemos", "estamos"). NADA de',
+      'fórmulas robóticas tipo "Como asistente virtual..."; ve directo a ayudar.',
       '',
       'DATOS VERIFICADOS (son reales y ya calculados; NO los cuestiones ni los recalcules):',
       '- Fecha y hora actuales: ' + fecha + ', ' + hora + ' (hora local del cliente).',
@@ -462,45 +533,62 @@
       '- Dirección: ' + (biz.direccion || 'no disponible') + '.',
       (biz.resumenServicios ? '- Servicios (resumen): ' + biz.resumenServicios + '.' : ''),
       '',
-      'CONTENIDO DE LA PÁGINA (tu ÚNICA fuente para servicios, precios, promociones,',
-      'productos, ubicación, políticas y cualquier otro detalle del negocio):',
+      'CONTENIDO DE LA PÁGINA (tu fuente principal para servicios, precios,',
+      'productos, cartas, ingredientes, tallas, ubicación, políticas, etc.):',
       '"""',
       allPagesText(),
       '"""',
       '',
-      'REGLAS:',
-      '1. Responde SOLO con los datos de arriba. Nunca inventes precios, servicios,',
-      '   horarios ni datos de contacto que no aparezcan.',
-      '2. Si no tienes la información exacta para responder, escribe una frase breve y',
-      '   amable en el idioma del usuario invitándole a contactar directamente con el',
-      '   negocio, y TERMINA tu mensaje con el token literal ' + NO_INFO + ' en una línea',
-      '   aparte. No uses ese token si sí sabes responder.',
-      '3. Responde SIEMPRE en el mismo idioma en que te escriba el usuario.',
-      '4. Máximo 3-4 frases. Nada de rollos para preguntas simples.',
-      '5. No copies literalmente frases de la página; redáctalo con tus palabras.',
-      '6. Si preguntan por horario/si está abierto, usa el "Estado ahora mismo" de arriba,',
-      '   tal cual, sin recalcular fechas por tu cuenta.',
-      '7. Preguntas ajenas al negocio (recetas, política, etc.): declina con amabilidad y',
-      '   recuerda que solo puedes ayudar con temas de esta web.'
+      'CÓMO RESPONDER:',
+      '1. Fuente principal = el contenido de la página y los datos verificados de arriba.',
+      '   Úsalos siempre que respondan a la pregunta.',
+      '2. SÉ ÚTIL, no un muro de "no lo sé". Si la pregunta es sobre el SECTOR del negocio',
+      '   (p.ej. en placas solares: "¿puedo instalar en tejado plano?", "¿cuántas placas',
+      '   para una nevera?"; en un restaurante: alérgenos habituales de un plato; en ropa:',
+      '   cómo suele tallar una prenda), puedes dar una orientación general y sensata,',
+      '   dejando SIEMPRE claro que es aproximada e invitando a confirmarlo con el negocio',
+      '   (presupuesto/estudio/reserva). Marca las estimaciones como aproximadas.',
+      '3. NUNCA inventes datos ESPECÍFICOS del negocio que no aparezcan: precios exactos,',
+      '   medidas/potencias concretas, disponibilidad, teléfonos o direcciones distintas.',
+      '   Para esos, remite al negocio.',
+      '4. Solo si NO puedes ayudar de forma útil (te piden un dato concreto que el negocio',
+      '   no ha publicado y no cabe orientación general): escribe una frase breve y amable',
+      '   invitando a contactar, y TERMINA con el token literal ' + NO_INFO + ' en su propia',
+      '   línea. No uses ese token si has podido ayudar aunque sea de forma general.',
+      '5. Responde SIEMPRE en el idioma del usuario. Sé natural y completo pero SIN relleno:',
+      '   di lo justo para ayudar de verdad y para. No repitas la pregunta, no hagas',
+      '   introducciones vacías ("Gracias por tu pregunta...") ni cierres de más. Cada',
+      '   palabra cuenta (ahorramos tokens): calidez sí, paja no.',
+      '6. Para horario/"¿está abierto?", usa el "Estado ahora mismo" de arriba tal cual,',
+      '   sin recalcular fechas por tu cuenta.',
+      '7. Temas totalmente ajenos al negocio (política, deberes, recetas de otra cosa):',
+      '   declina con amabilidad y recuerda que ayudas con temas de esta web.'
     ].filter(Boolean).join('\n');
   }
 
   function answerQuestion(biz, userText) {
-    var history = ssGet(SS_HISTORY, []);
-    var contents = history.slice(-10).map(function (m) {
-      return { role: m.role, parts: [{ text: m.text }] };
+    // El historial YA termina con el mensaje actual (onSend lo guardó antes de
+    // llamar aquí), así que NO lo volvemos a añadir (antes se duplicaba).
+    var raw = ssGet(SS_HISTORY, []).slice(-12);
+    // Colapsa turnos consecutivos del mismo rol: tras un envío fallido quedan
+    // dos 'user' seguidos y Gemini exige alternancia user/model (si no, 400).
+    var contents = [];
+    raw.forEach(function (m) {
+      var last = contents[contents.length - 1];
+      if (last && last.role === m.role) last.parts[0].text += '\n' + m.text;
+      else contents.push({ role: m.role, parts: [{ text: m.text }] });
     });
-    contents.push({ role: 'user', parts: [{ text: userText }] });
+    while (contents.length && contents[0].role === 'model') contents.shift();
 
     return callGemini({
       systemInstruction: { parts: [{ text: buildSystemPrompt(biz) }] },
       contents: contents,
       generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 500,
-        // Chat = respuestas ágiles: desactivamos el razonamiento del modelo.
-        // (La Fase 1 sí razona para interpretar horarios raros; esto es distinto.)
-        thinkingConfig: { thinkingBudget: 0 }
+        temperature: 0.45,          // algo de calidez/variedad, sin desvariar
+        maxOutputTokens: 320        // techo de coste: respuestas concisas, ahorra tokens
+        // Sin thinkingConfig: el modelo por defecto (flash-lite) NO lo soporta y ya
+        // es rápido y sin coste de razonamiento. Si se fuerza un modelo "pensante"
+        // (flash-latest), el reintento de doGemini se encarga si hiciera falta.
       }
     });
   }
@@ -523,7 +611,10 @@
    * DETECCIÓN DE TEMA (claro/oscuro) según el fondo real de la web host
    * =======================================================================*/
   function luminance(rgb) {
-    var m = rgb.match(/\d+(\.\d+)?/g);
+    // Solo entendemos rgb()/rgba(). Con oklch/display-p3/etc. devolvemos null
+    // para que detectTheme caiga a prefers-color-scheme en vez de adivinar mal.
+    if (!/^rgba?\(/i.test(rgb)) return null;
+    var m = rgb.match(/[\d.]+/g);
     if (!m) return 1;
     var r = +m[0], g = +m[1], b = +m[2], a = m[3] !== undefined ? +m[3] : 1;
     if (a < 0.5) return 1; // transparente => trátalo como claro
@@ -566,8 +657,10 @@
     if (marker) return marker;
     try {
       var lum = luminance(effectiveBg());
-      if (lum < 0.4) return 'dark';
-      if (lum > 0.6) return 'light';
+      if (lum != null) {
+        if (lum < 0.4) return 'dark';
+        if (lum > 0.6) return 'light';
+      }
     } catch (e) {}
     return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
       ? 'dark' : 'light';
@@ -581,24 +674,30 @@
    * ICONOS (SVG inline, sin dependencias)
    * =======================================================================*/
   var ICONS = {
-    chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
-    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
-    wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.2-1.7-.8-1.9-.9-.3-.1-.5-.2-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.2-.6-1.5-.9-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 .9-1 2.3s1 2.7 1.2 2.9c.1.2 2 3.1 4.9 4.3.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3zM12 2a10 10 0 0 0-8.6 15L2 22l5.1-1.3A10 10 0 1 0 12 2z"/></svg>',
-    call: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.9.6 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.7 2z"/></svg>'
+    close: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    send: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+    arrow: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>',
+    wa: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.2-1.7-.8-1.9-.9-.3-.1-.5-.2-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.2-.6-1.5-.9-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 .9-1 2.3s1 2.7 1.2 2.9c.1.2 2 3.1 4.9 4.3.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3zM12 2a10 10 0 0 0-8.6 15L2 22l5.1-1.3A10 10 0 1 0 12 2z"/></svg>',
+    call: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.9.6 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.7 2z"/></svg>'
   };
 
   /* =========================================================================
-   * CONSTRUCCIÓN DE LA UI
+   * CONSTRUCCIÓN DE LA UI  (lanzador-barra + conversación tipográfica)
    * =======================================================================*/
-  var els = {};   // referencias a nodos
-  var state = { open: false, busy: false, biz: null, greeted: false };
+  var els = {};
+  var state = { open: false, busy: false, biz: null, greeted: false, lastSpeaker: null };
 
   function el(tag, cls, html) {
     var n = document.createElement(tag);
     if (cls) n.className = cls;
-    if (html != null) n.innerHTML = html; // solo para iconos SVG propios (contenido de confianza)
+    if (html != null) n.innerHTML = html; // solo iconos SVG propios (de confianza)
     return n;
+  }
+
+  // Etiqueta del que habla en cada turno (nombre real del negocio para el bot).
+  function botTag() {
+    var nm = (state.biz && state.biz.nombreNegocio) || detectBusinessName();
+    return nm.slice(0, 24);
   }
 
   function buildUI() {
@@ -606,133 +705,151 @@
     root.id = 'cbw-root';
     root.setAttribute('data-cbw-theme', detectTheme());
     if (ACCENT) root.style.setProperty('--cbw-accent', ACCENT);
+    if (ACCENT) root.style.setProperty('--cbw-accent-ink', '#fff');
     if (FONT) root.style.setProperty('--cbw-font', FONT === 'inherit' ? 'inherit' : FONT);
 
-    // --- FAB ---
-    var fab = el('button', 'cbw-fab');
-    fab.type = 'button';
-    fab.setAttribute('aria-label', T.online + ' — ' + (NAME_OVERRIDE || 'chat'));
-    fab.setAttribute('aria-expanded', 'false');
-    var iconChat = el('span', 'cbw-fab-icon-chat', ICONS.chat);
-    var iconClose = el('span', 'cbw-fab-icon-close', ICONS.close);
-    fab.appendChild(iconChat); fab.appendChild(iconClose);
-    // Pulso de aviso UNA sola vez en la vida (primera carga). Marcamos cbw_seen
-    // ya, para que no vuelva a pulsar en cargas siguientes aunque no lo abran.
-    if (!lsGet(LS_SEEN)) { fab.classList.add('cbw-pulse'); lsSet(LS_SEEN, '1'); }
+    // --- Lanzador: barra "Pregúntanos", NO un círculo con bocadillo ---
+    var launch = el('button', 'cbw-launch');
+    launch.type = 'button';
+    launch.setAttribute('aria-label', T.ask);
+    launch.setAttribute('aria-expanded', 'false');
+    var lDot = el('span', 'cbw-launch-dot');
+    var lLabel = el('span', 'cbw-launch-label'); lLabel.textContent = T.ask;
+    var lArrow = el('span', 'cbw-launch-arrow', ICONS.arrow);
+    launch.appendChild(lDot); launch.appendChild(lLabel); launch.appendChild(lArrow);
+    // Pulso de aviso una sola vez en la vida.
+    if (!lsGet(LS_SEEN)) { launch.classList.add('cbw-pulse'); lsSet(LS_SEEN, '1'); }
 
     // --- Panel ---
     var panel = el('div', 'cbw-panel');
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'false');
-    panel.setAttribute('aria-label', 'Chat de atención al cliente');
+    panel.setAttribute('aria-label', T.dialog);
 
-    // Header
-    var header = el('div', 'cbw-header');
-    var avatar = el('div', 'cbw-avatar');
-    var headText = el('div', 'cbw-head-text');
-    var title = el('div', 'cbw-title'); title.textContent = 'Asistente';
+    // Cabecera: identidad tipográfica (nombre + estado en mono), sin avatar.
+    var head = el('div', 'cbw-head');
+    var id = el('div', 'cbw-id');
+    var name = el('div', 'cbw-name'); name.textContent = detectBusinessName();
     var status = el('div', 'cbw-status');
-    var dot = el('span', 'cbw-status-dot');
-    var statusLabel = el('span', 'cbw-status-label'); statusLabel.textContent = T.online;
-    status.appendChild(dot); status.appendChild(statusLabel);
-    headText.appendChild(title); headText.appendChild(status);
-    var closeBtn = el('button', 'cbw-close', ICONS.close);
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', T.close);
-    header.appendChild(avatar); header.appendChild(headText); header.appendChild(closeBtn);
+    var sDot = el('span', 'cbw-status-dot');
+    var sLabel = el('span', 'cbw-status-label'); sLabel.textContent = T.online;
+    status.appendChild(sDot); status.appendChild(sLabel);
+    id.appendChild(name); id.appendChild(status);
+    var closeBtn = el('button', 'cbw-x', ICONS.close);
+    closeBtn.type = 'button'; closeBtn.setAttribute('aria-label', T.close);
+    head.appendChild(id); head.appendChild(closeBtn);
 
-    // Mensajes. role=log + aria-live para que un lector de pantalla anuncie
-    // las respuestas del bot según llegan (si no, el usuario ciego no se entera).
-    var messages = el('div', 'cbw-messages');
-    messages.setAttribute('role', 'log');
-    messages.setAttribute('aria-live', 'polite');
-    messages.setAttribute('aria-relevant', 'additions text');
+    // Hilo (transcript). role=log + aria-live para lectores de pantalla.
+    var thread = el('div', 'cbw-thread');
+    thread.setAttribute('role', 'log');
+    thread.setAttribute('aria-live', 'polite');
+    thread.setAttribute('aria-relevant', 'additions text');
 
-    // Barra de entrada
-    var inputbar = el('div', 'cbw-inputbar');
-    var textarea = el('textarea', 'cbw-textarea');
-    textarea.rows = 1;
-    textarea.setAttribute('placeholder', T.placeholder);
-    textarea.setAttribute('aria-label', T.placeholder);
-    var sendBtn = el('button', 'cbw-send', ICONS.send);
-    sendBtn.type = 'button';
-    sendBtn.setAttribute('aria-label', T.send);
-    inputbar.appendChild(textarea); inputbar.appendChild(sendBtn);
+    // Compositor: línea de escritura + enviar.
+    var compose = el('div', 'cbw-compose');
+    var field = el('textarea', 'cbw-field');
+    field.rows = 1;
+    field.setAttribute('placeholder', T.placeholder);
+    field.setAttribute('aria-label', T.placeholder);
+    var send = el('button', 'cbw-send', ICONS.send);
+    send.type = 'button'; send.setAttribute('aria-label', T.send);
+    compose.appendChild(field); compose.appendChild(send);
 
-    // Footer discreto
-    var footer = el('div', 'cbw-footer');
-    footer.innerHTML = '<b>' + T.credit + '</b>';
+    var foot = el('div', 'cbw-foot'); foot.textContent = T.credit;
 
-    panel.appendChild(header);
-    panel.appendChild(messages);
-    panel.appendChild(inputbar);
-    panel.appendChild(footer);
-
-    root.appendChild(panel);
-    root.appendChild(fab);
+    panel.appendChild(head); panel.appendChild(thread);
+    panel.appendChild(compose); panel.appendChild(foot);
+    root.appendChild(panel); root.appendChild(launch);
     document.body.appendChild(root);
 
     els = {
-      root: root, fab: fab, panel: panel, avatar: avatar, title: title,
-      status: status, statusLabel: statusLabel, messages: messages,
-      textarea: textarea, sendBtn: sendBtn
+      root: root, launch: launch, launchDot: lDot, panel: panel, name: name,
+      status: status, statusLabel: sLabel, thread: thread, field: field, send: send
     };
 
-    // --- Eventos ---
-    fab.addEventListener('click', toggle);
+    launch.addEventListener('click', toggle);
     closeBtn.addEventListener('click', close);
-    sendBtn.addEventListener('click', onSend);
-    textarea.addEventListener('keydown', function (e) {
+    send.addEventListener('click', onSend);
+    field.addEventListener('keydown', function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // no enviar a mitad de un acento/IME
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
     });
-    textarea.addEventListener('input', autoGrow);
+    field.addEventListener('input', autoGrow);
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && state.open) close();
     });
+    panel.addEventListener('keydown', trapFocus);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncViewport);
+      window.visualViewport.addEventListener('scroll', syncViewport);
+    }
 
     avoidCollision();
-    // Algunas webs cargan su botón de WhatsApp tarde; recomprobamos.
-    setTimeout(avoidCollision, 1600);
+    setTimeout(avoidCollision, 1600); // por si el WhatsApp de la web carga tarde
+    var rzT;
+    window.addEventListener('resize', function () { clearTimeout(rzT); rzT = setTimeout(avoidCollision, 200); });
   }
 
   function autoGrow() {
-    var ta = els.textarea;
-    ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 96) + 'px';
+    var f = els.field;
+    f.style.height = 'auto';
+    f.style.height = Math.min(f.scrollHeight, 104) + 'px';
   }
 
   /* ---- Apertura / cierre --------------------------------------------------*/
   function isMobile() { return window.matchMedia('(max-width: 480px)').matches; }
-
   function toggle() { state.open ? close() : open(); }
 
   function open() {
     state.open = true;
     els.root.classList.add('cbw-is-open');
-    els.fab.classList.remove('cbw-pulse');
-    els.fab.setAttribute('aria-expanded', 'true');
+    els.launch.classList.remove('cbw-pulse');
+    els.launch.setAttribute('aria-expanded', 'true');
     lsSet(LS_SEEN, '1');
-    if (isMobile()) {
-      document.documentElement.classList.add('cbw-lock');
-      els.panel.style.bottom = ''; // en móvil manda el CSS (pantalla completa)
-    }
+    els.panel.setAttribute('aria-modal', 'true');
+    if (isMobile()) document.documentElement.classList.add('cbw-lock');
     renderHistory();
     if (!state.greeted && ssGet(SS_HISTORY, []).length === 0) greet();
-    setTimeout(function () { els.textarea.focus(); }, 260);
-    ensureBusiness(); // dispara la Fase 1 si aún no está
+    setTimeout(function () { els.field.focus(); }, 280);
+    ensureBusiness();
   }
 
   function close() {
     state.open = false;
     els.root.classList.remove('cbw-is-open');
-    els.fab.setAttribute('aria-expanded', 'false');
+    els.panel.setAttribute('aria-modal', 'false');
+    els.launch.setAttribute('aria-expanded', 'false');
     document.documentElement.classList.remove('cbw-lock');
-    els.fab.focus();
+    els.panel.style.bottom = ''; els.panel.style.height = ''; // limpia ajuste de teclado
+    els.launch.focus();
   }
 
-  /* ---- Colisión con otros flotantes (WhatsApp fijo, etc.) -----------------*/
+  // Móvil: al abrir el teclado, sube la hoja por encima de él y ajusta su alto
+  // (dvh no encoge con el teclado; sin esto se tapaba el campo de escritura).
+  function syncViewport() {
+    var p = els.panel; if (!p) return;
+    var vv = window.visualViewport;
+    if (!vv || !state.open || !isMobile()) { p.style.bottom = ''; p.style.height = ''; return; }
+    var kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    if (kb > 80) { p.style.bottom = kb + 'px'; p.style.height = Math.round(vv.height * 0.98) + 'px'; }
+    else { p.style.bottom = ''; p.style.height = ''; }
+  }
+
+  // Atrapa el foco dentro del panel abierto (Tab/Shift+Tab hacen bucle).
+  function trapFocus(e) {
+    if (e.key !== 'Tab' || !state.open) return;
+    var f = [].slice.call(els.panel.querySelectorAll('button,a[href],textarea,[tabindex]:not([tabindex="-1"])'))
+      .filter(function (n) { return n.offsetWidth || n.offsetHeight || n === document.activeElement; });
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
+  /* ---- Colisión con el botón de WhatsApp fijo de la web (sube el lanzador) */
   function avoidCollision() {
     try {
+      els.launch.style.bottom = ''; // limpia offset previo por si la colisión desapareció
       var vw = window.innerWidth, vh = window.innerHeight;
       var nodes = document.body.querySelectorAll('a,div,button,span');
       var lift = 0;
@@ -742,47 +859,39 @@
         var cs = getComputedStyle(n);
         if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
         var r = n.getBoundingClientRect();
-        if (r.width === 0 || r.height === 0 || r.width > 160 || r.height > 160) continue;
-        // ¿otro flotante pegado a la esquina inferior derecha?
-        if (r.right > vw - 90 && r.bottom > vh - 110) {
-          lift = Math.min(r.height + 26, 120);
-          break;
-        }
+        if (r.width === 0 || r.height === 0 || r.width > 170 || r.height > 170) continue;
+        if (r.right > vw - 90 && r.bottom > vh - 110) { lift = Math.min(r.height + 24, 120); break; }
       }
       if (!lift) return;
-      var safe = ' + env(safe-area-inset-bottom, 0px)';
-      if (isMobile()) {
-        els.fab.style.bottom = 'calc(16px + ' + lift + 'px' + safe + ')';
-      } else {
-        els.fab.style.bottom = 'calc(var(--cbw-gap-edge) + ' + lift + 'px' + safe + ')';
-        // El panel sube lo mismo para no quedar tapado por el FAB elevado.
-        els.panel.style.bottom = 'calc(var(--cbw-gap-edge) + ' + (lift + 56 + 14) + 'px' + safe + ')';
-      }
+      var edge = isMobile() ? '16px' : 'var(--cbw-gap)';
+      els.launch.style.bottom = 'calc(' + edge + ' + ' + lift + 'px + env(safe-area-inset-bottom, 0px))';
     } catch (e) {}
   }
 
-  /* ---- Render de mensajes -------------------------------------------------*/
-  function scrollDown() { els.messages.scrollTop = els.messages.scrollHeight; }
+  /* ---- Render de la conversación (turnos con etiqueta, sin globos) --------*/
+  function scrollDown() { els.thread.scrollTop = els.thread.scrollHeight; }
 
-  function addBubble(role, text) {
-    var row = el('div', 'cbw-row ' + (role === 'user' ? 'cbw-user' : 'cbw-bot'));
-    var col = el('div', 'cbw-col');           // columna: burbuja + (fallback debajo)
-    var bubble = el('div', 'cbw-bubble');
-    bubble.textContent = text; // SIEMPRE textContent: nada de HTML sin escapar
-    col.appendChild(bubble);
-    row.appendChild(col);
-    els.messages.appendChild(row);
+  function addTurn(role, text) {
+    var isUser = role === 'user';
+    var same = state.lastSpeaker === role; // agrupa turnos seguidos del mismo hablante
+    state.lastSpeaker = role;
+    var turn = el('div', 'cbw-turn ' + (isUser ? 'cbw-turn-user' : 'cbw-turn-bot') + (same ? ' cbw-same' : ''));
+    if (!same) { var tag = el('div', 'cbw-tag'); tag.textContent = isUser ? T.you : botTag(); turn.appendChild(tag); }
+    var body = el('div', 'cbw-text'); body.textContent = text; // textContent: seguro
+    turn.appendChild(body);
+    els.thread.appendChild(turn);
     scrollDown();
-    return row;
+    return turn;
   }
 
   function showTyping() {
-    var row = el('div', 'cbw-row cbw-bot cbw-typing-row');
-    var t = el('div', 'cbw-typing', '<span></span><span></span><span></span>');
-    row.appendChild(t);
-    els.messages.appendChild(row);
+    var turn = el('div', 'cbw-turn cbw-turn-bot');
+    var tag = el('div', 'cbw-tag'); tag.textContent = botTag();
+    var t = el('div', 'cbw-typing', '<i></i><i></i><i></i>');
+    turn.appendChild(tag); turn.appendChild(t);
+    els.thread.appendChild(turn);
     scrollDown();
-    return row;
+    return turn;
   }
 
   function pushHistory(role, text) {
@@ -792,16 +901,19 @@
   }
 
   function renderHistory() {
-    els.messages.innerHTML = '';
+    els.thread.setAttribute('aria-live', 'off'); // no re-anunciar el volcado en bloque
+    els.thread.innerHTML = '';
+    state.lastSpeaker = null;
     var h = ssGet(SS_HISTORY, []);
     h.forEach(function (m) {
-      var text = m.text;
-      var hadNoInfo = text.indexOf(NO_INFO) >= 0;
-      text = text.replace(NO_INFO, '').trim();
-      var row = addBubble(m.role === 'user' ? 'user' : 'bot', text);
-      if (hadNoInfo && m.role === 'model') attachFallback(row, lastUserQuestion(h, m));
+      var hadNoInfo = m.text.indexOf(NO_INFO) >= 0;
+      var text = m.text.replace(NO_INFO, '').trim();
+      if (hadNoInfo && !text) text = fallbackText(); // sentinela solo => mismo texto que en vivo
+      var turn = addTurn(m.role === 'user' ? 'user' : 'bot', text);
+      if (hadNoInfo && m.role === 'model') attachFallback(turn, lastUserQuestion(h, m));
     });
     if (h.length) state.greeted = true;
+    setTimeout(function () { els.thread.setAttribute('aria-live', 'polite'); }, 60);
   }
 
   function lastUserQuestion(history, modelMsg) {
@@ -813,44 +925,40 @@
   function greet() {
     state.greeted = true;
     var name = (state.biz && state.biz.nombreNegocio) || detectBusinessName();
-    addBubble('bot', T.greet.replace('{name}', name));
+    addTurn('bot', T.greet.replace('{name}', name));
     renderSuggestions();
   }
 
   function renderSuggestions() {
-    var wrap = el('div', 'cbw-suggestions');
+    var wrap = el('div', 'cbw-suggest');
     T.sugg.forEach(function (q) {
-      var chip = el('button', 'cbw-chip');
-      chip.type = 'button';
-      chip.textContent = q;
-      chip.addEventListener('click', function () {
-        wrap.remove();
-        els.textarea.value = q;
-        onSend();
+      var s = el('button', 'cbw-sug'); s.type = 'button'; s.textContent = q;
+      s.addEventListener('click', function () {
+        wrap.remove(); els.field.value = q; onSend();
       });
-      wrap.appendChild(chip);
+      wrap.appendChild(s);
     });
-    els.messages.appendChild(wrap);
+    els.thread.appendChild(wrap);
     scrollDown();
   }
 
-  /* ---- Botones de fallback bajo un mensaje --------------------------------*/
-  function attachFallback(botRow, question) {
+  /* ---- Contacto directo (WhatsApp / Llamar) bajo un turno del bot ---------*/
+  function attachFallback(botTurn, question) {
     var phone = state.biz && state.biz.telefono;
-    if (!phone) return; // sin teléfono no mostramos botones rotos
+    if (!phone) return; // sin teléfono, no mostramos botones rotos
     var actions = el('div', 'cbw-actions');
 
-    var wa = el('a', 'cbw-action cbw-action-wa', ICONS.wa + '<span></span>');
+    var wa = el('a', 'cbw-act cbw-act-wa', ICONS.wa + '<span></span>');
     wa.querySelector('span').textContent = T.wa;
     wa.href = generarEnlaceWhatsApp(phone, question || '');
     wa.target = '_blank'; wa.rel = 'noopener noreferrer';
 
-    var call = el('a', 'cbw-action cbw-action-call', ICONS.call + '<span></span>');
+    var call = el('a', 'cbw-act cbw-act-call', ICONS.call + '<span></span>');
     call.querySelector('span').textContent = T.call;
     call.href = 'tel:' + normalizarTelefono(phone);
 
     actions.appendChild(wa); actions.appendChild(call);
-    (botRow.querySelector('.cbw-col') || botRow).appendChild(actions);
+    botTurn.appendChild(actions);
     scrollDown();
   }
 
@@ -866,13 +974,12 @@
 
   function applyBusinessToHeader(biz) {
     var name = (biz && biz.nombreNegocio) || detectBusinessName();
-    els.title.textContent = name;
-    els.avatar.textContent = (name.trim()[0] || 'A');
-    els.fab.setAttribute('aria-label', name + ' — chat');
-    // Estado abierto/cerrado en el header (calculado en JS).
+    els.name.textContent = name;
+    els.launch.setAttribute('aria-label', T.ask + ' - ' + name);
     var st = biz && getOpenStatus(biz.horario);
     if (st) {
       els.status.classList.toggle('cbw-open', !!st.abierto);
+      els.launch.classList.toggle('cbw-on', !!st.abierto);
       els.statusLabel.textContent = st.abierto ? T.open : T.closed;
     } else {
       els.statusLabel.textContent = T.online;
@@ -880,20 +987,20 @@
   }
 
   function onSend() {
-    var text = els.textarea.value.trim();
+    var text = els.field.value.trim();
     if (!text || state.busy) return;
 
-    // limpia sugerencias iniciales si siguen
-    var sugg = els.messages.querySelector('.cbw-suggestions');
+    var sugg = els.thread.querySelector('.cbw-suggest');
     if (sugg) sugg.remove();
 
-    els.textarea.value = '';
+    els.field.value = '';
     autoGrow();
-    addBubble('user', text);
+    addTurn('user', text);
     pushHistory('user', text);
 
     state.busy = true;
-    els.sendBtn.disabled = true;
+    els.send.disabled = true;
+    els.thread.setAttribute('aria-busy', 'true'); // señal "escribiendo" para lectores de pantalla
     var typing = showTyping();
 
     ensureBusiness().then(function (biz) {
@@ -905,28 +1012,49 @@
       var clean = answer.replace(NO_INFO, '').trim();
       if (!clean) clean = fallbackText();
       pushHistory('model', answer);
-      var row = addBubble('bot', clean);
-      if (hadNoInfo) attachFallback(row, text);
+      var turn = addTurn('bot', clean);
+      if (hadNoInfo) attachFallback(turn, text);
     }).catch(function (err) {
       typing.remove();
-      var row = addBubble('bot', T.apiError);
-      attachFallback(row, text); // ofrece WhatsApp aunque la API falle
-      // no guardamos el error en el historial
-      if (window.console) console.warn('[cbw]', err);
+      var kind = err && err.kind;
+      var turn = addTurn('bot', kind === 'quota' ? (T.apiBusy || T.apiError) : T.apiError);
+      attachFallback(turn, text); // SIEMPRE ofrece WhatsApp/llamar aunque la API falle
+      ownerDiagnostic(kind, err); // aviso claro para el dueño de la web en consola
     }).then(function () {
       state.busy = false;
-      els.sendBtn.disabled = false;
-      els.textarea.focus();
+      els.send.disabled = false;
+      els.thread.setAttribute('aria-busy', 'false');
+      els.field.focus();
     });
   }
 
+  // Diagnóstico para el DUEÑO de la web (una vez por tipo de fallo): así, si el
+  // bot no responde, en la consola (F12) aparece la causa exacta y cómo resolverla.
+  var _diagShown = {};
+  function ownerDiagnostic(kind, err) {
+    if (!window.console) return;
+    console.warn('[chatbot-widget]', (err && err.message) || err);
+    if (_diagShown[kind]) return;
+    _diagShown[kind] = true;
+    if (kind === 'auth') {
+      console.error('%c[chatbot-widget] La API key de Gemini NO es válida o está restringida.',
+        'color:#c0392b;font-weight:bold;font-size:13px');
+      console.error('[chatbot-widget] Solución: genera una key en https://aistudio.google.com/apikey, ' +
+        'ponla en data-gemini-key y restríngela por dominio. Ojo: las keys que empiezan por "AQ." ' +
+        'suelen darse tras exponer una key y pueden fallar; intenta obtener una que empiece por "AIza".');
+    } else if (kind === 'quota') {
+      console.error('[chatbot-widget] Cuota de Gemini agotada hoy (plan gratis). El widget ya prueba ' +
+        'varios modelos. Para tráfico real activa facturación en Google Cloud, o espera al reset ' +
+        '(medianoche hora del Pacífico). Consumo: https://ai.dev/rate-limit');
+    } else if (kind === 'network') {
+      console.error('[chatbot-widget] No se pudo contactar con Gemini (red/CORS/timeout). ' +
+        'Revisa la conexión y que la CSP de la web permita conectar con generativelanguage.googleapis.com.');
+    }
+  }
+
   function fallbackText() {
-    // Texto neutro cuando el modelo solo devolvió el sentinela.
-    return T.greet.indexOf('{name}') >= 0
-      ? (LOCALE === 'es'
-          ? 'No tengo ese dato exacto en la web, pero el negocio puede ayudarte directamente:'
-          : 'I don\'t have that exact detail on the site, but the business can help you directly:')
-      : '';
+    // Texto neutro (localizado) cuando el modelo solo devolvió el sentinela.
+    return T.noInfo || '';
   }
 
   /* =========================================================================
@@ -935,6 +1063,7 @@
   function actualizarContexto() {
     updatePagesStore();
     applyTheme(); // por si la web cambió de tema
+    avoidCollision(); // por si un WhatsApp flotante de terceros cargó tarde
 
     // Refresca el estado abierto/cerrado del header (la hora avanza).
     if (state.biz) applyBusinessToHeader(state.biz);
@@ -983,8 +1112,10 @@
    * =======================================================================*/
   function init() {
     if (!document.body) { document.addEventListener('DOMContentLoaded', init); return; }
-    if (!API_KEY && window.console) {
-      console.warn('[cbw] Falta data-gemini-key: el widget se muestra pero no podrá responder.');
+    if (!API_KEY && !PROXY && window.console) {
+      console.error('%c[chatbot-widget] Falta data-gemini-key (o data-endpoint). El chat se ve, ' +
+        'pero no podrá responder. Pon tu API key de Gemini en el <script> del loader.',
+        'color:#c0392b;font-weight:bold');
     }
     updatePagesStore();      // guarda el contenido de esta página
     buildUI();               // pinta FAB + panel (cerrado)

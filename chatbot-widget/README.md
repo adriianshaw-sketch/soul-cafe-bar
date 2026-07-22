@@ -32,6 +32,7 @@ así que basta con subir la carpeta entera junto a la web.
 | `data-accent`       | Color de acento (`#hex`) para adaptar el widget a la marca.               |
 | `data-theme`        | `light` o `dark` para fijar el tema. Por defecto: **automático**.          |
 | `data-font`         | `inherit` para adoptar la tipografía de la web, o una familia concreta.    |
+| `data-endpoint`     | URL de un proxy (Cloudflare Worker) para NO exponer la key. Ver «Modo seguro». |
 
 Todos son opcionales salvo la key. Lo normal es **no poner ninguno**: el widget se
 autoconfigura leyendo la página.
@@ -108,9 +109,29 @@ widget alguna vez, para no repetir el pulso de aviso).
 
 Hecho esto una vez, puedes reutilizar la misma key en todas las webs sin tocar nada más.
 
-> ¿Quieres blindaje total (que la key no aparezca nunca en el HTML)? Habría que poner un
-> pequeño proxy de servidor que guarde la key y reenvíe la llamada a Gemini. No es
-> necesario para este proyecto, pero es la opción si algún día lo pide un cliente grande.
+## 🔒 Modo seguro (recomendado): proxy, la key nunca en el HTML
+
+Si no quieres que la key viaje en el HTML (lo ideal para producción), usa el proxy incluido
+`worker.js` (un **Cloudflare Worker**, plan gratis 100.000 peticiones/día). La key vive en el
+worker, el widget solo habla con el worker:
+
+1. Crea cuenta gratis en Cloudflare → **Workers & Pages** → *Create Worker*, pega `worker.js`.
+2. En el worker: **Settings → Variables and Secrets** → secreto `GEMINI_KEY` = tu API key.
+   (Opcional: variable `ALLOWED_ORIGINS` = `https://tudominio.com` para restringir por dominio.)
+3. En tu web, en vez de la key:
+   ```html
+   <script src="chatbot-widget/loader.js"
+           data-endpoint="https://mi-chat.TUUSUARIO.workers.dev"></script>
+   ```
+
+Así resuelves de golpe la seguridad (la key no se ve, no se puede copiar) sin dejar de usar el
+plan gratis de Gemini. Los pasos completos están comentados dentro de `worker.js`.
+
+## 🛟 Nunca falla en silencio
+
+Si el bot no puede responder, **el cliente siempre ve un mensaje amable + botón de WhatsApp**
+(nunca se queda mudo), y **tú ves en la consola (F12) la causa exacta**: "API key no válida",
+"cuota agotada" o "problema de red", con la solución. Abre la consola del navegador si dudas.
 
 ---
 
@@ -119,8 +140,11 @@ Hecho esto una vez, puedes reutilizar la misma key en todas las webs sin tocar n
 - Por defecto: alias **`gemini-flash-lite-latest`** (hoy = `gemini-3.1-flash-lite`). Se
   actualiza solo **sin tocar código nunca** y, sobre todo, tiene una **cuota gratuita
   mucho mayor**. Para esta tarea (leer la web y responder) va sobrado.
-- Para fijar otro modelo: `data-gemini-model="gemini-flash-latest"` o
-  `data-gemini-model="gemini-3.5-flash"`, o cambia `GEMINI_MODEL` en `widget.js`.
+- **Fallback automático de modelos:** el widget prueba una lista (`flash-lite-latest` →
+  `flash-latest`). Si uno da 429 (cuota) o 404 (Google lo retiró), salta solo al siguiente
+  —que tiene su propia cuota—, así que aguanta el churn de modelos y los topes sin tocar nada.
+- Para fijar otro modelo primero: `data-gemini-model="gemini-flash-latest"`, o cambia la
+  lista `MODELS` en `widget.js`.
 
 ### ⚠️ Cuotas: lo que tienes que saber antes de poner esto en producción
 
@@ -170,11 +194,13 @@ menu?", "¿tenéis parking?" (dispara el fallback de WhatsApp).
 
 ```
 chatbot-widget/
-├── loader.js    inyecta widget.css + widget.js y lee la config
-├── widget.js    extracción + Fase 1 + Fase 2 + estado horario + UI de chat
-├── widget.css   estilos (prefijo .cbw-), claro/oscuro, móvil
-├── demo.html    página de prueba
-└── README.md    este archivo
+├── loader.js       inyecta widget.css + widget.js y lee la config
+├── widget.js       extracción + Fase 1 + Fase 2 + estado horario + UI de chat
+├── widget.css      estilos (prefijo .cbw-), claro/oscuro, móvil
+├── worker.js       proxy seguro opcional (Cloudflare Worker) — la key no viaja al navegador
+├── demo.html       página de prueba (restaurante)
+├── demo-solar.html página de prueba (placas solares)
+└── README.md       este archivo
 ```
 
 ## ✅ Requisitos y compatibilidad

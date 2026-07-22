@@ -1,504 +1,301 @@
 /* ============================================================================
-   Chatbot Widget — widget.css
-   Todos los estilos van con prefijo .cbw- para no pisar el CSS de la web host.
-   Diseñado en modo claro Y oscuro (parity real, no un modo de relleno).
-   Se inyecta desde loader.js.
+   Chatbot Widget — widget.css  ·  tesis "asistente editorial"
+   NO es el cuadradito genérico: sin globos de chat, sin círculo con bocadillo.
+   Conversación tipográfica (etiqueta + texto + hairlines), lanzador tipo barra
+   ("Pregúntanos"), tipografía Space Grotesk + mono, monocromo tinta/papel con
+   color solo donde SIGNIFICA algo (estado abierto/cerrado, WhatsApp).
+   Todo con prefijo .cbw- y bajo #cbw-root para no tocar la web host.
+   Claro + oscuro reales, móvil diseñado, accesible AA.
    ============================================================================ */
 
-/* ---- Tokens (modo claro por defecto) --------------------------------------
-   El tema real (light/dark) lo fija widget.js con [data-cbw-theme] sobre .cbw-root,
-   detectando el fondo de la web host. El media query es solo un respaldo por si
-   el JS no llegara a ejecutarse. */
+/* ---- Tokens (claro por defecto; el tema real lo fija el JS con data-cbw-theme) */
 .cbw-root {
-  /* Acento morado. #635beb (no el #6c63ff original) para que blanco sobre él
-     dé 4.97:1 (AA de texto normal); #6c63ff se quedaba en 4.32:1 y fallaba. */
-  --cbw-accent: #635beb;
-  --cbw-accent-ink: #ffffff;
-  --cbw-brand: #0f0f1a;
+  --cbw-paper: #f7f5f1;      /* papel cálido, no blanco frío */
+  --cbw-panel: #fffefb;      /* superficie del panel */
+  --cbw-ink: #191714;        /* tinta cálida casi negra */
+  --cbw-ink-soft: #6a655d;   /* texto secundario (AA sobre papel) */
+  --cbw-line: rgba(25, 23, 20, 0.12);
+  --cbw-line-strong: rgba(25, 23, 20, 0.22);
+  --cbw-field: #fffefb;
+  --cbw-accent: #191714;     /* por defecto = tinta (monocromo). data-accent lo cambia */
+  --cbw-accent-ink: #f7f5f1; /* texto sobre el acento */
+  --cbw-open: #1f9d57;
+  --cbw-closed: #a49d92;
+  --cbw-wa: #25d366;
+  --cbw-wa-ink: #05230f;
 
-  --cbw-panel-bg: #ffffff;
-  --cbw-panel-border: rgba(15, 15, 26, 0.08);
-  --cbw-surface: #f6f6fb;
-  --cbw-bot-bubble: #f0f0f5;
-  --cbw-bot-ink: #1a1a24;
-  --cbw-user-ink: #ffffff;
-  --cbw-text: #16161d;
-  --cbw-muted: #6b6b78;
-  --cbw-input-bg: #ffffff;
-  --cbw-input-border: rgba(15, 15, 26, 0.14);
-  --cbw-divider: rgba(15, 15, 26, 0.08);
-  --cbw-shadow: 0 18px 50px -12px rgba(15, 15, 26, 0.32), 0 4px 14px -6px rgba(15, 15, 26, 0.2);
-  --cbw-fab-shadow: 0 10px 30px -8px rgba(15, 15, 26, 0.5);
-  --cbw-open: #16b364;
-  --cbw-closed: #98989f;
+  --cbw-radius: 16px;
+  --cbw-radius-sm: 10px;
+  --cbw-gap: 22px;
+  --cbw-shadow: 0 22px 60px -20px rgba(25, 23, 20, 0.34), 0 6px 18px -10px rgba(25, 23, 20, 0.18);
 
-  /* geometría */
-  --cbw-radius: 20px;
-  --cbw-bubble-radius: 16px;
-  --cbw-gap-edge: 20px;
+  /* Por defecto HEREDA la tipografía de la web anfitriona (se siente nativo del
+     sitio, no un widget con fuente ajena). data-font la fija si se quiere. El
+     carácter editorial lo aporta el mono de sistema en etiquetas y estado. */
+  --cbw-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Roboto Mono', Menlo, monospace;
 
-  /* tipografía: se hereda de la web anfitriona para que el chat parezca parte del sitio */
-  --cbw-font: inherit;
-
-  font-family: var(--cbw-font);
+  font-family: var(--cbw-font, inherit);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* ---- Modo oscuro ---------------------------------------------------------- */
 .cbw-root[data-cbw-theme="dark"] {
-  --cbw-brand: #0b0b12;
-  --cbw-panel-bg: #14141c;
-  --cbw-panel-border: rgba(255, 255, 255, 0.08);
-  --cbw-surface: #1a1a24;
-  --cbw-bot-bubble: #23232f;
-  --cbw-bot-ink: #ececf2;
-  --cbw-user-ink: #ffffff;
-  --cbw-text: #ececf2;
-  --cbw-muted: #9a9aa8;
-  --cbw-input-bg: #1a1a24;
-  --cbw-input-border: rgba(255, 255, 255, 0.14);
-  --cbw-divider: rgba(255, 255, 255, 0.08);
-  --cbw-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.7), 0 4px 14px -6px rgba(0, 0, 0, 0.6);
-  --cbw-fab-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
-  --cbw-closed: #6b6b78;
+  --cbw-paper: #121110;
+  --cbw-panel: #191817;
+  --cbw-ink: #f2efe8;
+  --cbw-ink-soft: #a49c90;
+  --cbw-line: rgba(255, 255, 255, 0.13);
+  --cbw-line-strong: rgba(255, 255, 255, 0.26);
+  --cbw-field: #201e1c;
+  --cbw-accent: #f2efe8;
+  --cbw-accent-ink: #191714;
+  --cbw-closed: #6f685e;
+  --cbw-shadow: 0 24px 64px -18px rgba(0, 0, 0, 0.7), 0 6px 18px -10px rgba(0, 0, 0, 0.6);
 }
-
 @media (prefers-color-scheme: dark) {
   .cbw-root:not([data-cbw-theme="light"]) {
-    --cbw-brand: #0b0b12;
-    --cbw-panel-bg: #14141c;
-    --cbw-panel-border: rgba(255, 255, 255, 0.08);
-    --cbw-surface: #1a1a24;
-    --cbw-bot-bubble: #23232f;
-    --cbw-bot-ink: #ececf2;
-    --cbw-text: #ececf2;
-    --cbw-muted: #9a9aa8;
-    --cbw-input-bg: #1a1a24;
-    --cbw-input-border: rgba(255, 255, 255, 0.14);
-    --cbw-divider: rgba(255, 255, 255, 0.08);
-    --cbw-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.7), 0 4px 14px -6px rgba(0, 0, 0, 0.6);
-    --cbw-fab-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
-    --cbw-closed: #6b6b78;
+    --cbw-paper: #121110; --cbw-panel: #191817; --cbw-ink: #f2efe8; --cbw-ink-soft: #a49c90;
+    --cbw-line: rgba(255,255,255,0.13); --cbw-line-strong: rgba(255,255,255,0.26);
+    --cbw-field: #201e1c; --cbw-accent: #f2efe8; --cbw-accent-ink: #191714; --cbw-closed: #6f685e;
+    --cbw-shadow: 0 24px 64px -18px rgba(0,0,0,0.7), 0 6px 18px -10px rgba(0,0,0,0.6);
   }
 }
 
-/* ---- Root fijo (no hereda ni filtra estilos de la web) -------------------- */
-.cbw-root,
-.cbw-root * {
-  box-sizing: border-box;
-}
+.cbw-root, .cbw-root * { box-sizing: border-box; }
 .cbw-root {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483000; /* por encima de casi todo, por debajo del máximo entero */
-  pointer-events: none; /* solo los hijos concretos capturan clics */
+  position: fixed; inset: 0; z-index: 2147483000; pointer-events: none;
+  direction: ltr; unicode-bidi: isolate; /* no espejar en webs con dir="rtl" */
 }
-/* Reset de botones envuelto en :where() => especificidad 0. Así NUNCA gana a
-   las reglas de cada componente (.cbw-fab, .cbw-send, .cbw-chip…), que son
-   (0,1,0). Si esto fuera ".cbw-root button" (0,1,1) machacaría sus fondos y
-   paddings. [lección aprendida: reset de widget siempre por debajo de sus hijos] */
+/* Reset en :where() => especificidad 0, nunca gana a los componentes. */
 :where(.cbw-root button) {
-  font-family: inherit;
-  cursor: pointer;
-  border: 0;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  -webkit-appearance: none;
-  appearance: none;
+  font-family: inherit; cursor: pointer; border: 0; margin: 0; padding: 0;
+  background: transparent; color: inherit; -webkit-appearance: none; appearance: none;
 }
 
 /* ============================================================================
-   BOTÓN FLOTANTE (FAB)
+   LANZADOR — barra "Pregúntanos", no un círculo con bocadillo
    ============================================================================ */
-.cbw-fab {
+.cbw-launch {
   pointer-events: auto;
   position: fixed;
-  right: var(--cbw-gap-edge);
-  bottom: calc(var(--cbw-gap-edge) + env(safe-area-inset-bottom, 0px));
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--cbw-brand);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  box-shadow: var(--cbw-fab-shadow);
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+  right: var(--cbw-gap);
+  bottom: calc(var(--cbw-gap) + env(safe-area-inset-bottom, 0px));
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 12px 16px 12px 14px;
+  background: var(--cbw-ink);
+  color: var(--cbw-paper);
+  border-radius: 999px;
+  box-shadow: var(--cbw-shadow);
+  transition: transform .28s cubic-bezier(.2,1,.3,1), box-shadow .28s ease;
   will-change: transform;
 }
-.cbw-fab:hover { transform: scale(1.08); }
-.cbw-fab:active { transform: scale(0.96); }
-.cbw-fab:focus-visible {
-  outline: 3px solid var(--cbw-accent);
-  outline-offset: 3px;
+.cbw-launch:hover { transform: translateY(-2px); }
+.cbw-launch:active { transform: translateY(0) scale(.98); }
+.cbw-launch:focus-visible { outline: 2px solid var(--cbw-accent); outline-offset: 3px; }
+.cbw-launch-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--cbw-closed);
 }
-.cbw-fab svg { width: 26px; height: 26px; display: block; }
-.cbw-fab .cbw-fab-icon-close { display: none; }
+.cbw-launch.cbw-on .cbw-launch-dot { background: var(--cbw-open); }
+.cbw-launch-label {
+  font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap;
+}
+.cbw-launch-arrow { display: inline-flex; }
+.cbw-launch-arrow svg { width: 15px; height: 15px; display: block; }
 
-/* cuando el panel está abierto, el FAB muestra la X */
-.cbw-root.cbw-is-open .cbw-fab .cbw-fab-icon-chat { display: none; }
-.cbw-root.cbw-is-open .cbw-fab .cbw-fab-icon-close { display: block; }
+/* Pulso de aviso, UNA sola vez (respira el borde, sutil) */
+.cbw-launch.cbw-pulse { animation: cbw-breathe 2.6s ease-in-out 2; }
+@keyframes cbw-breathe {
+  0%,100% { box-shadow: var(--cbw-shadow); }
+  50% { box-shadow: var(--cbw-shadow), 0 0 0 8px rgba(25,23,20,0.06); }
+}
 
-/* Pulso de aviso, UNA sola vez (se retira desde JS tras la primera visita) */
-.cbw-fab.cbw-pulse::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  box-shadow: 0 0 0 0 var(--cbw-accent);
-  animation: cbw-pulse 2.2s cubic-bezier(0.66, 0, 0, 1) 3;
-}
-@keyframes cbw-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(108, 99, 255, 0.55); }
-  70%  { box-shadow: 0 0 0 16px rgba(108, 99, 255, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(108, 99, 255, 0); }
-}
+/* oculto cuando el panel está abierto (se cierra con la × de la cabecera) */
+.cbw-root.cbw-is-open .cbw-launch { opacity: 0; visibility: hidden; transform: translateY(8px); pointer-events: none; }
 
 /* ============================================================================
-   PANEL DE CHAT
+   PANEL
    ============================================================================ */
 .cbw-panel {
   pointer-events: auto;
   position: fixed;
-  right: var(--cbw-gap-edge);
-  bottom: calc(var(--cbw-gap-edge) + 56px + 14px + env(safe-area-inset-bottom, 0px));
-  width: 380px;
-  height: 520px;
-  max-height: calc(100vh - 40px);
-  background: var(--cbw-panel-bg);
-  border: 1px solid var(--cbw-panel-border);
+  right: var(--cbw-gap);
+  bottom: calc(var(--cbw-gap) + env(safe-area-inset-bottom, 0px));
+  width: 392px; height: 560px; max-height: calc(100vh - 44px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--cbw-panel);
+  border: 1px solid var(--cbw-line-strong);
   border-radius: var(--cbw-radius);
   box-shadow: var(--cbw-shadow);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  /* firma estructural: filo de acento arriba */
+  border-top: 2px solid var(--cbw-accent);
   transform-origin: bottom right;
-  opacity: 0;
-  transform: translateY(12px) scale(0.98);
-  visibility: hidden;
-  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.25s;
+  opacity: 0; transform: translateY(14px) scale(.985); visibility: hidden;
+  transition: opacity .26s ease, transform .3s cubic-bezier(.2,1,.3,1), visibility 0s linear .3s;
 }
 .cbw-root.cbw-is-open .cbw-panel {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  visibility: visible;
-  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
+  opacity: 1; transform: none; visibility: visible;
+  transition: opacity .26s ease, transform .3s cubic-bezier(.2,1,.3,1), visibility 0s;
 }
 
-/* ---- Header --------------------------------------------------------------- */
-.cbw-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 14px 14px 16px;
-  color: #fff;
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(108, 99, 255, 0.45), transparent 60%),
-    var(--cbw-brand);
+/* ---- Cabecera: identidad tipográfica, sin avatar de app ---- */
+.cbw-head {
+  flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--cbw-line);
 }
-.cbw-avatar {
-  flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.2px;
-  background: linear-gradient(135deg, var(--cbw-accent), #4b45c9);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  text-transform: uppercase;
-}
-.cbw-head-text { min-width: 0; flex: 1 1 auto; }
-.cbw-title {
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.cbw-id { min-width: 0; }
+.cbw-name {
+  font-size: 18px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15;
+  color: var(--cbw-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cbw-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 1.2;
-  margin-top: 3px;
-  color: rgba(255, 255, 255, 0.72);
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 6px;
+  font-family: var(--cbw-mono);
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--cbw-ink-soft);
 }
-.cbw-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cbw-closed);
-  flex: 0 0 auto;
+.cbw-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cbw-closed); flex: 0 0 auto; }
+.cbw-status.cbw-open .cbw-status-dot { background: var(--cbw-open); }
+.cbw-x {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: var(--cbw-radius-sm);
+  display: grid; place-items: center; color: var(--cbw-ink-soft); background: transparent;
+  transition: background .18s ease, color .18s ease;
 }
-.cbw-status.cbw-open .cbw-status-dot {
-  background: var(--cbw-open);
-  box-shadow: 0 0 0 3px rgba(22, 179, 100, 0.22);
-}
-.cbw-close {
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.85);
-  transition: background 0.18s ease;
-}
-.cbw-close:hover { background: rgba(255, 255, 255, 0.14); }
-.cbw-close:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.cbw-x:hover { background: var(--cbw-line); color: var(--cbw-ink); }
+.cbw-x:focus-visible { outline: 2px solid var(--cbw-accent); outline-offset: 1px; }
+.cbw-x svg { width: 17px; height: 17px; }
 
-/* Foco de teclado visible en TODO lo interactivo (enviar, chips, WhatsApp,
-   Llamar). Sin esto, quien navegue con Tab no ve dónde está. */
-.cbw-send:focus-visible,
-.cbw-chip:focus-visible,
-.cbw-action:focus-visible {
-  outline: 2px solid var(--cbw-accent);
-  outline-offset: 2px;
-}
-.cbw-send:focus-visible { outline-color: var(--cbw-text); }
-.cbw-close svg { width: 18px; height: 18px; }
-
-/* ---- Zona de mensajes ----------------------------------------------------- */
-.cbw-messages {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px 14px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: var(--cbw-panel-bg);
+/* ---- Hilo de conversación (transcript, sin globos) ---- */
+.cbw-thread {
+  flex: 1 1 auto; overflow-y: auto; overflow-x: hidden;
+  padding: 6px 18px 10px;
+  display: flex; flex-direction: column;
   overscroll-behavior: contain;
 }
-.cbw-messages::-webkit-scrollbar { width: 8px; }
-.cbw-messages::-webkit-scrollbar-thumb {
-  background: var(--cbw-divider);
-  border-radius: 8px;
-}
+.cbw-thread::-webkit-scrollbar { width: 8px; }
+.cbw-thread::-webkit-scrollbar-thumb { background: var(--cbw-line); border-radius: 8px; }
 
-.cbw-row { display: flex; width: 100%; }
-.cbw-row.cbw-user { justify-content: flex-end; }
-.cbw-row.cbw-bot { justify-content: flex-start; }
+.cbw-turn { padding: 16px 0; }
+.cbw-turn + .cbw-turn { border-top: 1px solid var(--cbw-line); }
+.cbw-tag {
+  font-family: var(--cbw-mono);
+  font-size: 10.5px; letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--cbw-ink-soft); margin-bottom: 7px;
+}
+.cbw-text {
+  font-size: 15px; line-height: 1.58; color: var(--cbw-ink);
+  white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere;
+}
+/* turno del usuario: alineado a la derecha, tinta acento en la etiqueta */
+.cbw-turn-user { text-align: right; }
+.cbw-turn-user .cbw-tag { color: var(--cbw-accent); }
+.cbw-turn-user .cbw-text { color: var(--cbw-ink); }
+/* turnos seguidos del mismo hablante: sin raya ni etiqueta repetida, agrupados */
+.cbw-turn.cbw-same { border-top: 0; padding-top: 0; margin-top: -6px; }
+/* turno del bot: la etiqueta lleva un guiño de acento */
+.cbw-turn-bot .cbw-tag { color: var(--cbw-accent); }
 
-/* Columna interior: apila la burbuja y (si toca) los botones de fallback debajo,
-   en vez de ponerlos al lado de la burbuja. */
-.cbw-col { display: flex; flex-direction: column; max-width: 82%; min-width: 0; }
-.cbw-user .cbw-col { align-items: flex-end; }
-.cbw-bot .cbw-col { align-items: flex-start; }
+.cbw-turn { animation: cbw-rise .3s cubic-bezier(.2,1,.3,1); }
+@keyframes cbw-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-.cbw-bubble {
-  max-width: 100%;
-  padding: 10px 13px;
-  font-size: 14.5px;
-  line-height: 1.45;
-  border-radius: var(--cbw-bubble-radius);
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: anywhere;
-  animation: cbw-bubble-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+/* acciones de contacto (WhatsApp / Llamar) bajo un turno del bot */
+.cbw-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.cbw-act {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 999px; text-decoration: none;
+  font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
+  transition: transform .16s ease, filter .16s ease, background .16s ease;
 }
-.cbw-user .cbw-bubble {
-  background: var(--cbw-accent);
-  color: var(--cbw-user-ink);
-  border-bottom-right-radius: 5px;
-}
-.cbw-bot .cbw-bubble {
-  background: var(--cbw-bot-bubble);
-  color: var(--cbw-bot-ink);
-  border-bottom-left-radius: 5px;
-}
-@keyframes cbw-bubble-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+.cbw-act:active { transform: scale(.97); }
+.cbw-act svg { width: 15px; height: 15px; }
+.cbw-act-wa { background: var(--cbw-wa); color: var(--cbw-wa-ink); }
+.cbw-act-wa:hover { filter: brightness(1.05); }
+.cbw-act-call { background: transparent; color: var(--cbw-ink); border: 1px solid var(--cbw-line-strong); }
+.cbw-act-call:hover { background: var(--cbw-line); }
+.cbw-act:focus-visible { outline: 2px solid var(--cbw-accent); outline-offset: 2px; }
 
-/* Botones de fallback (WhatsApp / Llamar) bajo un mensaje del bot */
-.cbw-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-.cbw-action {
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 14px;
-  border-radius: 999px;
-  font-size: 13.5px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: transform 0.16s ease, filter 0.16s ease;
-}
-.cbw-action:active { transform: scale(0.97); }
-.cbw-action svg { width: 16px; height: 16px; }
-.cbw-action-wa {
-  background: #25d366;
-  color: #06301a;
-}
-.cbw-action-wa:hover { filter: brightness(1.05); }
-.cbw-action-call {
-  background: var(--cbw-surface);
-  color: var(--cbw-text);
-  border: 1px solid var(--cbw-input-border);
-}
-.cbw-action-call:hover { filter: brightness(0.98); }
+/* "escribiendo" — tres barras, editorial */
+.cbw-typing { display: inline-flex; align-items: flex-end; gap: 4px; height: 16px; padding: 16px 0; }
+.cbw-typing i { width: 3px; height: 8px; background: var(--cbw-ink-soft); border-radius: 2px; animation: cbw-bar 1s ease-in-out infinite; }
+.cbw-typing i:nth-child(2) { animation-delay: .15s; }
+.cbw-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes cbw-bar { 0%,100% { height: 6px; opacity: .5; } 50% { height: 15px; opacity: 1; } }
 
-/* Indicador "escribiendo…" */
-.cbw-typing {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  padding: 12px 14px;
-  background: var(--cbw-bot-bubble);
-  border-radius: var(--cbw-bubble-radius);
-  border-bottom-left-radius: 5px;
+/* sugerencias iniciales — como líneas, no chips de colores */
+.cbw-suggest { display: flex; flex-direction: column; align-items: flex-start; gap: 0; margin-top: 4px; }
+.cbw-sug {
+  pointer-events: auto; width: 100%; text-align: left; background: transparent;
+  padding: 13px 2px; border-top: 1px solid var(--cbw-line);
+  font-size: 14.5px; color: var(--cbw-ink);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  transition: color .16s ease;
 }
-.cbw-typing span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cbw-muted);
-  opacity: 0.5;
-  animation: cbw-typing 1.2s infinite ease-in-out;
-}
-.cbw-typing span:nth-child(2) { animation-delay: 0.18s; }
-.cbw-typing span:nth-child(3) { animation-delay: 0.36s; }
-@keyframes cbw-typing {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
-  30% { transform: translateY(-4px); opacity: 1; }
-}
+.cbw-sug:last-child { border-bottom: 1px solid var(--cbw-line); }
+.cbw-sug::after { content: '→'; color: var(--cbw-ink-soft); font-family: var(--cbw-mono); transition: transform .16s ease; }
+.cbw-sug:hover { color: var(--cbw-accent); }
+.cbw-sug:hover::after { transform: translateX(3px); color: var(--cbw-accent); }
+.cbw-sug:focus-visible { outline: 2px solid var(--cbw-accent); outline-offset: 2px; }
 
-/* ---- Sugerencias iniciales (chips) --------------------------------------- */
-.cbw-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  padding: 2px 2px 8px;
+/* ---- Compositor: línea de escritura, no una caja pastilla ---- */
+.cbw-compose {
+  flex: 0 0 auto; display: flex; align-items: flex-end; gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--cbw-line-strong);
+  background: var(--cbw-panel);
 }
-.cbw-chip {
-  pointer-events: auto;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--cbw-text);
-  background: var(--cbw-surface);
-  border: 1px solid var(--cbw-input-border);
-  transition: transform 0.16s ease, filter 0.16s ease;
+.cbw-field {
+  flex: 1 1 auto; resize: none; max-height: 104px; min-height: 24px;
+  padding: 8px 2px; font-family: inherit; font-size: 15px; line-height: 1.45;
+  color: var(--cbw-ink); background: transparent; border: 0; outline: none;
 }
-.cbw-chip:hover { filter: brightness(0.98); }
-.cbw-chip:active { transform: scale(0.97); }
-
-/* ---- Barra de entrada ----------------------------------------------------- */
-.cbw-inputbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid var(--cbw-divider);
-  background: var(--cbw-panel-bg);
-}
-.cbw-textarea {
-  flex: 1 1 auto;
-  resize: none;
-  max-height: 96px;
-  min-height: 42px;
-  padding: 11px 14px;
-  font-family: inherit;
-  font-size: 14.5px;
-  line-height: 1.4;
-  color: var(--cbw-text);
-  background: var(--cbw-input-bg);
-  border: 1px solid var(--cbw-input-border);
-  border-radius: 14px;
-  outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-.cbw-textarea::placeholder { color: var(--cbw-muted); }
-.cbw-textarea:focus {
-  border-color: var(--cbw-accent);
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.18);
-}
+.cbw-field::placeholder { color: var(--cbw-ink-soft); }
+/* Foco de teclado visible en el campo (el textarea no puede llevar outline propio). */
+.cbw-compose:focus-within { outline: 2px solid var(--cbw-accent); outline-offset: -2px; }
 .cbw-send {
-  flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: var(--cbw-accent);
-  color: var(--cbw-accent-ink);
-  display: grid;
-  place-items: center;
-  transition: transform 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: var(--cbw-radius-sm);
+  background: var(--cbw-ink); color: var(--cbw-panel);
+  display: grid; place-items: center;
+  transition: transform .16s ease, opacity .16s ease;
 }
-.cbw-send:hover { filter: brightness(1.06); }
-.cbw-send:active { transform: scale(0.94); }
-.cbw-send:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
-.cbw-send svg { width: 20px; height: 20px; }
+.cbw-send:hover { transform: translateY(-1px); }
+.cbw-send:active { transform: scale(.94); }
+.cbw-send:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.cbw-send:focus-visible { outline: 2px solid var(--cbw-accent); outline-offset: 2px; }
+.cbw-send svg { width: 18px; height: 18px; }
 
-.cbw-footer {
-  flex: 0 0 auto;
-  text-align: center;
-  font-size: 10.5px;
-  letter-spacing: 0.2px;
-  color: var(--cbw-muted);
-  padding: 0 12px calc(8px + env(safe-area-inset-bottom, 0px));
-  background: var(--cbw-panel-bg);
+.cbw-foot {
+  flex: 0 0 auto; text-align: center; padding: 0 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  font-family: var(--cbw-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--cbw-ink-soft); background: var(--cbw-panel);
 }
-.cbw-footer b { font-weight: 600; color: var(--cbw-text); opacity: 0.75; }
 
 /* ============================================================================
-   MÓVIL (≤480px): ventana casi a pantalla completa, pegada abajo, 100dvh
+   MÓVIL (≤480px): hoja a pantalla casi completa
    ============================================================================ */
 @media (max-width: 480px) {
   .cbw-panel {
-    right: 0;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    height: 92dvh;
-    max-height: 92dvh;
-    border-radius: 22px 22px 0 0;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
-    transform-origin: bottom center;
-    transform: translateY(100%);
+    right: 0; left: 0; bottom: 0; width: 100%;
+    height: 92dvh; max-height: 92dvh;
+    border-radius: var(--cbw-radius) var(--cbw-radius) 0 0;
+    border-left: 0; border-right: 0; border-bottom: 0;
+    border-top: 2px solid var(--cbw-accent);
+    transform-origin: bottom center; transform: translateY(100%);
   }
   .cbw-root.cbw-is-open .cbw-panel { transform: translateY(0); }
-  .cbw-fab {
-    right: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  }
-  /* En móvil el panel es pantalla completa: cerramos con la X del header,
-     así que el FAB se oculta mientras está abierto (no debe flotar encima). */
-  .cbw-root.cbw-is-open .cbw-fab { display: none; }
-  /* bloquea el scroll del fondo mientras el chat está abierto */
+  .cbw-launch { right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .cbw-root.cbw-is-open .cbw-launch { display: none; }
   html.cbw-lock, html.cbw-lock body { overflow: hidden !important; }
 }
 
 /* ============================================================================
-   Accesibilidad: movimiento reducido
+   Movimiento reducido
    ============================================================================ */
 @media (prefers-reduced-motion: reduce) {
-  .cbw-fab,
-  .cbw-panel,
-  .cbw-bubble,
-  .cbw-action,
-  .cbw-send,
-  .cbw-chip { transition: none !important; animation: none !important; }
-  .cbw-fab.cbw-pulse::after { animation: none !important; }
-  .cbw-typing span { animation: none !important; opacity: 0.7; }
+  .cbw-launch, .cbw-panel, .cbw-turn, .cbw-act, .cbw-send, .cbw-sug, .cbw-sug::after, .cbw-x {
+    transition: none !important; animation: none !important;
+  }
+  .cbw-launch.cbw-pulse { animation: none !important; }
+  .cbw-typing i { animation: none !important; height: 8px; opacity: .7; }
 }
