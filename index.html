@@ -430,6 +430,9 @@ footer { position: relative; z-index: 1; }
   }
   .nav-links.open a { font-size: 1.9rem; font-family: "Fraunces", serif; color: var(--ink); }
   .nav-links.open a::after { display: none; }
+  /* Con el menú abierto, el backdrop-filter del header scrolleado crea un containing
+     block y el menú fixed deja de cubrir la pantalla. Se anula mientras está abierto. */
+  header.nav:has(.nav-links.open) { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
   .nav-toggle-btn { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 11px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; z-index: 60; }
   .nav-toggle-btn svg { width: 20px; height: 20px; }
   .moments { grid-template-columns: 1fr; }
