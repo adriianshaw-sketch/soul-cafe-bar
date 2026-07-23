@@ -780,6 +780,7 @@
       if (e.key === 'Escape' && state.open) close();
     });
     panel.addEventListener('keydown', trapFocus);
+    watchLocale();   // sigue los cambios de <html lang> del selector ES/EN de la web
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', syncViewport);
       window.visualViewport.addEventListener('scroll', syncViewport);
@@ -935,7 +936,9 @@
     T.sugg.forEach(function (q) {
       var s = el('button', 'cbw-sug'); s.type = 'button'; s.textContent = q;
       s.addEventListener('click', function () {
-        wrap.remove(); els.field.value = q; onSend();
+        // Se lee la etiqueta ACTUAL (no la capturada): si la web cambia de idioma,
+        // el chip ya se ha reescrito y debe enviarse la pregunta en ese idioma.
+        wrap.remove(); els.field.value = this.textContent; onSend();
       });
       wrap.appendChild(s);
     });
@@ -985,6 +988,37 @@
     } else {
       els.statusLabel.textContent = T.online;
     }
+  }
+
+  /* La web puede cambiar de idioma DESPUÉS de que cargue el widget (selector ES/EN).
+     Sin esto, el panel se quedaba en el idioma inicial mientras la página ya estaba
+     en el otro (p.ej. "Pregúntanos" en una página en inglés) — incumple la norma
+     bilingüe. Se reaplican los textos estáticos; el historial de la charla no se toca. */
+  function applyLocale() {
+    var nuevo = detectLocale();
+    if (nuevo === LOCALE) return;
+    LOCALE = nuevo;
+    T = I18N[LOCALE] || I18N.es;
+    if (!els.root) return;
+    var q = function (sel) { return els.root.querySelector(sel); };
+    var lbl = q('.cbw-launch-label'); if (lbl) lbl.textContent = T.ask;
+    if (els.panel) els.panel.setAttribute('aria-label', T.dialog);
+    if (els.field) { els.field.setAttribute('placeholder', T.placeholder); els.field.setAttribute('aria-label', T.placeholder); }
+    if (els.send) els.send.setAttribute('aria-label', T.send);
+    var x = q('.cbw-x'); if (x) x.setAttribute('aria-label', T.close);
+    var foot = q('.cbw-foot'); if (foot) foot.textContent = T.credit;
+    var chips = els.root.querySelectorAll('.cbw-sug');
+    if (chips.length === T.sugg.length) {
+      for (var i = 0; i < chips.length; i++) chips[i].textContent = T.sugg[i];
+    }
+    applyBusinessToHeader(state.biz);
+  }
+
+  function watchLocale() {
+    if (!('MutationObserver' in window)) return;
+    new MutationObserver(applyLocale).observe(document.documentElement, {
+      attributes: true, attributeFilter: ['lang']
+    });
   }
 
   function onSend() {
