@@ -555,10 +555,11 @@
       '   no ha publicado y no cabe orientación general): escribe una frase breve y amable',
       '   invitando a contactar, y TERMINA con el token literal ' + NO_INFO + ' en su propia',
       '   línea. No uses ese token si has podido ayudar aunque sea de forma general.',
-      '5. Responde SIEMPRE en el idioma del usuario y MUY BREVE: 1-2 frases, 3 como',
-      '   máximo absoluto. Ve directo al dato. Prohibido: repetir la pregunta, saludos',
-      '   largos, introducciones ("Gracias por tu pregunta", "Claro que sí"), coletillas',
-      '   y cierres de relleno. Si cabe en una frase, una frase. Calidez sí, paja no.',
+      '5. Responde SIEMPRE en el idioma del usuario y ULTRA BREVE: idealmente 1 frase,',
+      '   2 como máximo absoluto, y nunca más de ~35 palabras. Ve directo al dato.',
+      '   Prohibido: repetir la pregunta, saludos, introducciones ("Gracias por tu',
+      '   pregunta", "Claro que sí"), coletillas y cierres de relleno. Si cabe en una',
+      '   frase, una frase. Calidez sí, paja no.',
       '6. Para horario/"¿está abierto?", usa el "Estado ahora mismo" de arriba tal cual,',
       '   sin recalcular fechas por tu cuenta.',
       '7. Temas totalmente ajenos al negocio (política, deberes, recetas de otra cosa):',
@@ -585,7 +586,7 @@
       contents: contents,
       generationConfig: {
         temperature: 0.4,
-        maxOutputTokens: 180        // respuestas MUY cortas (1-3 frases) + ahorro de tokens
+        maxOutputTokens: 120        // respuestas ULTRA cortas (1-2 frases) + ahorro de tokens
         // Sin thinkingConfig: el modelo por defecto (flash-lite) NO lo soporta y ya
         // es rápido y sin coste de razonamiento. Si se fuerza un modelo "pensante"
         // (flash-latest), el reintento de doGemini se encarga si hiciera falta.
